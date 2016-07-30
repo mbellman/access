@@ -9,6 +9,8 @@
 		factory(scope);
 	}
 })(typeof window !== 'undefined' ? window : this, function(scope, isModule) {
+	'use strict';
+	
 	// Collection of library objects and methods to prepare for outer-scope exposure
 	var AccessUtilities = {};
 
@@ -27,7 +29,7 @@
 	 *
 	 * Queues a script file for importing by adding it to the internal {includeList}.
 	 *
-	 * @param {file} The root-relative path to the script file
+	 * @param {file} : The root-relative path to the script file
 	 */
 	function include(file) {
 		var script = Imports.root + '/' + file;
@@ -43,7 +45,7 @@
 	 * Kick-starts the actual script loading and subsequent class
 	 * generation process, firing a callback upon completion.
 	 *
-	 * @param {callback} A callback function to be fired after all scripts are loaded/classes generated
+	 * @param {callback} : A callback function to be fired after all scripts are loaded/classes generated
 	 */
 	function main(callback) {
 
