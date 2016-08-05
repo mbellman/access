@@ -1,0 +1,1 @@
+var global2 = 'Global 2.';
