@@ -2,86 +2,6 @@
 	'use strict';
 
 	/**
-	 * Collection of library objects and methods to prepare for global scope exposure
-	 */
-	var AccessUtilities = {
-		include: include,
-		main: main
-	};
-
-	/**
-	 * Configuration and methods arbitrating script imports
-	 */
-	var Imports = {
-		// Static root filepath
-		root: '.',
-		// List of script file names as imported via include()
-		scripts: [],
-		// Number of still-pending script imports
-		pending: 0,
-		// Timeout before verifying that all external script
-		// loading has finished/application can be started
-		doneTimer: null,
-
-		/**
-		 * ## - Imports.checkIfDone()
-		 *
-		 * Verifies that no script imports are still pending, and if so
-		 * calls the Imports.on.loadedAll completion handler
-		 */
-		checkIfDone: function () {
-			if (Imports.pending === 0) {
-				Imports.on.loadedAll();
-			}
-		},
-
-		// Script load status handlers
-		on: {
-			/**
-			 * ## - Imports.on.loadedOne()
-			 *
-			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
-			 * decrements Imports.pending, and queues the Imports.checkIfDone process if no remaining scripts are pending
-			 * @param {script} [HTMLElement] : The script tag to remove
-			 */
-			loadedOne: function (script) {
-				return function () {
-					Core.DOM.remove(script);
-
-					if (--Imports.pending <= 0) {
-						window.clearTimeout(Imports.doneTimer);
-
-						Imports.doneTimer = window.setTimeout(
-							Imports.checkIfDone, 250
-						);
-					}
-				};
-			},
-
-			/**
-			 * ## - Imports.on.loadedAll()
-			 *
-			 * Event handler for full script import completion; kicks off the class generation process
-			 */
-			loadedAll: function () {
-				Core.generate();
-			},
-
-			/**
-			 * ## - Imports.on.error()
-			 *
-			 * Returns a custom single-script load error handler function which warns about the script file path
-			 * @param {script} [HTMLElement] : The script tag to reference
-			 */
-			error: function (script) {
-				return function () {
-					console.warn('Failed to load: ' + script.src);
-				};
-			}
-		}
-	};
-
-	/**
 	 * A private namespace of convenience methods for internal library use only
 	 */
 	var A = {
@@ -192,6 +112,86 @@
 	};
 
 	/**
+	 * Collection of library objects and methods to prepare for global scope exposure
+	 */
+	var AccessUtilities = {
+		include: include,
+		main: main
+	};
+
+	/**
+	 * Configuration and methods arbitrating script imports
+	 */
+	var Imports = {
+		// Static root filepath
+		root: '.',
+		// List of script file names as imported via include()
+		scripts: [],
+		// Number of still-pending script imports
+		pending: 0,
+		// Timeout before verifying that all external script
+		// loading has finished/application can be started
+		doneTimer: null,
+
+		/**
+		 * ## - Imports.checkIfDone()
+		 *
+		 * Verifies that no script imports are still pending, and if so
+		 * calls the Imports.on.loadedAll completion handler
+		 */
+		checkIfDone: function () {
+			if (Imports.pending === 0) {
+				Imports.on.loadedAll();
+			}
+		},
+
+		// Script load status handlers
+		on: {
+			/**
+			 * ## - Imports.on.loadedOne()
+			 *
+			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
+			 * decrements Imports.pending, and queues the Imports.checkIfDone process if no remaining scripts are pending
+			 * @param {script} [HTMLElement] : The script tag to remove
+			 */
+			loadedOne: function (script) {
+				return function () {
+					Core.DOM.remove(script);
+
+					if (--Imports.pending <= 0) {
+						window.clearTimeout(Imports.doneTimer);
+
+						Imports.doneTimer = window.setTimeout(
+							Imports.checkIfDone, 250
+						);
+					}
+				};
+			},
+
+			/**
+			 * ## - Imports.on.loadedAll()
+			 *
+			 * Event handler for full script import completion; kicks off the class generation process
+			 */
+			loadedAll: function () {
+				Core.generate();
+			},
+
+			/**
+			 * ## - Imports.on.error()
+			 *
+			 * Returns a custom single-script load error handler function which warns about the script file path
+			 * @param {script} [HTMLElement] : The script tag to reference
+			 */
+			error: function (script) {
+				return function () {
+					console.warn('Failed to load: ' + script.src);
+				};
+			}
+		}
+	};
+
+	/**
 	 * A private namespace of internal core variables and library routines
 	 */
 	var Core = {
@@ -243,7 +243,7 @@
 		/**
 		 * ## - Core.load()
 		 *
-		 * Asynchronously loads a JavaScript file, updating the Imports scripts list and pending scripts counter 
+		 * Asynchronously loads a JavaScript file, updating Imports.scripts and Imports.pending
 		 * @param {file} [String] : Script file path
 		 */
 		load: function (file) {
