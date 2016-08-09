@@ -10,13 +10,75 @@
 	};
 
 	/**
-	 * Options and data for script importing
+	 * Configuration and methods arbitrating script imports
 	 */
 	var Imports = {
 		// Static root filepath
 		root: '.',
-		// Queue of script files imported via include()
-		scripts: []
+		// List of script file names as imported via include()
+		scripts: [],
+		// Number of still-pending script imports
+		pending: 0,
+		// Timeout before verifying that all external script
+		// loading has finished/application can be started
+		doneTimer: null,
+
+		/**
+		 * ## - Imports.checkIfDone()
+		 *
+		 * Verifies that no script imports are still pending, and if so
+		 * calls the Imports.on.loadedAll completion handler
+		 */
+		checkIfDone: function () {
+			if (Imports.pending === 0) {
+				Imports.on.loadedAll();
+			}
+		},
+
+		// Script load status handlers
+		on: {
+			/**
+			 * ## - Imports.on.loadedOne()
+			 *
+			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
+			 * decrements Imports.pending, and queues the Imports.checkIfDone process if no remaining scripts are pending
+			 * @param {script} [HTMLElement] : The script tag to remove
+			 */
+			loadedOne: function (script) {
+				return function () {
+					Core.DOM.remove(script);
+
+					if (--Imports.pending <= 0) {
+						window.clearTimeout(Imports.doneTimer);
+
+						Imports.doneTimer = window.setTimeout(
+							Imports.checkIfDone, 250
+						);
+					}
+				};
+			},
+
+			/**
+			 * ## - Imports.on.loadedAll()
+			 *
+			 * Event handler for full script import completion; kicks off the class generation process
+			 */
+			loadedAll: function () {
+				Core.generate();
+			},
+
+			/**
+			 * ## - Imports.on.error()
+			 *
+			 * Returns a custom single-script load error handler function which warns about the script file path
+			 * @param {script} [HTMLElement] : The script tag to reference
+			 */
+			error: function (script) {
+				return function () {
+					console.warn('Failed to load: ' + script.src);
+				};
+			}
+		}
 	};
 
 	/**
@@ -24,11 +86,22 @@
 	 */
 	var A = {
 		/**
+		 * ## - A.instanceOf()
+		 *
+		 * Evaluates whether or not a value is an instance of a particular class.
+		 * @param {value} [*] : The value to check against
+		 * @param {instance} [Function] : The class instance to check the {value} against
+		 */
+		instanceOf: function (value, instance) {
+			return (value instanceof instance);
+		},
+
+		/**
 		 * ## - A.func()
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
 		 * an anonymous function to override it if not. Otherwise, returns the assignee.
-		 * @param {assignee} : The variable whose type is to be checked against
+		 * @param {assignee} [*] : The variable to check against
 		 */
 		func: function (assignee) {
 			if (typeof assignee !== 'function') {
@@ -41,15 +114,30 @@
 		/**
 		 * ## - A.each()
 		 *
-		 * Iterates over unique properties of an object, passing both the key and value into a handler function
-		 * @param {object} : The object to iterate over
-		 * @param {handler(key, value)} : A handler function to act with the key and value data
+		 * Iterates over an enumerable list of items (either an Object or an Array). Non-recursive.
+		 *
+		 * For Objects:
+		 * Iterates over the unique properties of an object, passing both the key and value into a handler function
+		 * @param {list} [Object] : The object to iterate over
+		 * @param {handler(key, value)} [Function] : A handler function to act with the key and value data
+		 *
+		 * For Arrays:
+		 * Iterates over the elements in an array, passing the element value and the index into a handler function
+		 * @param {list} [Array] : The array to iterate over
+		 * @param {handler(value, index)} [Function] : A handler function to act with the value and index
 		 */
-		each: function (object, handler) {
+		each: function (list, handler) {
 			handler = A.func(handler);
-			for (var key in object) {
-				if (object.hasOwnProperty(key)) {
-					handler(key, object[key]);
+
+			if (A.instanceOf(list, Array)) {
+				for (var i = 0 ; i < list.length ; i++) {
+					handler(list[i], i);
+				}
+			} else if (A.instanceOf(list, Object) && !A.instanceOf(list, Function)) {
+				for (var key in list) {
+					if (list.hasOwnProperty(key)) {
+						handler(key, list[key]);
+					}
 				}
 			}
 		},
@@ -58,8 +146,8 @@
 		 * ## - A.extend()
 		 *
 		 * Extends a target object with properties from an arbitrary number of other objects (deep & recursive)
-		 * @param {object1} : The target object
-		 * @param {[object2, [object3, [...]]]} : Objects used to extend target
+		 * @param {object1} [Object] : The target object
+		 * @param {[object2, [object3, [...]]]} [Object] : Objects used to extend target
 		 */
 		extend: function () {
 			var objects = Array.prototype.slice.call(arguments, 0);
@@ -89,8 +177,8 @@
 		 * ## - A.isInArray()
 		 *
 		 * Determine whether a value is contained within a one-dimensional array
-		 * @param {array} : The array to search through
-		 * @param {value} : The value to search for
+		 * @param {array} [Array] : The array to search through
+		 * @param {value} [*] : The value to search for
 		 */
 		isInArray: function (array, value) {
 			for (var i = 0 ; i < array.length ; i++) {
@@ -104,9 +192,19 @@
 	};
 
 	/**
-	 * A private namespace of internal core library routines
+	 * A private namespace of internal core variables and library routines
 	 */
 	var Core = {
+		// Whether or not the main() application entry point callback has been fired
+		started: false,
+
+		/**
+		 * ## - Core.main()
+		 *
+		 * A placeholder for the application entry point callback reserved by main()
+		 */
+		main: A.func(),
+
 		/**
 		 * DOM-related routines
 		 */
@@ -115,7 +213,7 @@
 			 * ## - Core.DOM.create()
 			 *
 			 * Create and return a new DOM element
-			 * @param {type} : The element tag type
+			 * @param {type} [String] : The element tag type
 			 */
 			create: function (type) {
 				return document.createElement(type);
@@ -125,7 +223,7 @@
 			 * ## - Core.DOM.append()
 			 *
 			 * Append a new child element node to the DOM
-			 * @param {node} : The child element node to append
+			 * @param {node} [HTMLElement] : The child element node to append
 			 */
 			append: function (node) {
 				document.body.appendChild(node);
@@ -135,7 +233,7 @@
 			 * ## - Core.DOM.remove()
 			 *
 			 * Remove an existing child element node from the DOM
-			 * @param {node} : The child element node to remove
+			 * @param {node} [HTMLElement]: The child element node to remove
 			 */
 			remove: function (node) {
 				document.body.removeChild(node);
@@ -145,60 +243,65 @@
 		/**
 		 * ## - Core.load()
 		 *
-		 * Asynchronously loads JavaScript files from an array and triggers a callback upon completion
-		 * @param {scripts} : An array of script file paths
-		 * @param {callback} : A handler to be run upon load completion
+		 * Asynchronously loads a JavaScript file, updating the Imports scripts list and pending scripts counter 
+		 * @param {file} [String] : Script file path
 		 */
-		load: function (scripts, callback) {
-			callback = A.func(callback);
+		load: function (file) {
+			Imports.scripts.push(file);
+			Imports.pending++;
 
-			var total = scripts.length;
-			var loaded = 0;
+			var script = Core.DOM.create('script');
+			script.onload = Imports.on.loadedOne(script);
+			script.onerror = Imports.on.error(script);
+			script.src = file;
 
-			function onLoadedOne () {
-				Core.DOM.remove(this);
+			Core.DOM.append(script);
+		},
 
-				if (++loaded >= total) {
-					callback();
-				}
-			}
+		/**
+		 * ## - Core.generate()
+		 *
+		 * Starts the class generation process
+		 */
+		generate: function () {
+			// ...
 
-			for (var i = 0 ; i < total ; i++) {
-				var scriptTag = Core.DOM.create('script');
-				scriptTag.onload = onLoadedOne;
-				scriptTag.src = scripts[i];
-
-				Core.DOM.append(scriptTag);
-			}
+			Core.main();
 		}
 	};
 
 	/**
 	 * ### - Library method: include()
 	 *
-	 * Queues a script file for importing by adding it to the internal Imports.scripts array.
-	 * @param {file} : The root-relative path to the script file
+	 * Asynchronously loads one or multiple script files by passing the path(s) into Core.load()
+	 * @param {file} [String, Array] : The root-relative path(s) to the script file(s)
 	 */
 	function include (file) {
-		var script = Imports.root + '/' + file;
+		if (A.instanceOf(file, Array)) {
+			A.each(file, function(script){
+				include(script);
+			});
+		} else {
+			var script = Imports.root + '/' + file;
 
-		if (!A.isInArray(Imports.scripts, script)) {
-			Imports.scripts.push(script);
+			if (!A.isInArray(Imports.scripts, script)) {
+				Core.load(script);
+			}
 		}
 	}
 
 	/**
 	 * ### - Library method: main()
 	 *
-	 * Kick-starts the actual script loading and subsequent class generation process, firing a callback upon completion.
-	 * @param {callback} : A callback function to be fired after all scripts are loaded/classes generated
+	 * Reserves a callback function to be fired after all script imports are complete
+	 * @param {callback} [Function]: A callback function to be fired after all scripts are loaded/classes generated
 	 */
 	function main (callback) {
-		callback = A.func(callback);
-
-		Core.load(Imports.scripts, callback);
+		if (!Core.started) {
+			Core.main = A.func(callback);
+		}
 	}
 
-	// Export
+	// Export library utilities to the global scope
 	A.extend(window, AccessUtilities);
 })();

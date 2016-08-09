@@ -1,1 +1,4 @@
-var global1 = 'Global 1.';
+include('test2.js');
+include('test3.js');
+
+var global1 = "Hello 1.";
