@@ -10,7 +10,7 @@
 		 *
 		 * Evaluates whether or not a value is an instance of a particular class.
 		 * @param {value} [*] : The value to check against
-		 * @param {instance} [Function] : The class instance to check the {value} against
+		 * @param {instance} [Function] : The class instance to check the value against
 		 */
 		instanceOf: function (value, instance) {
 			return (value instanceof instance);
@@ -293,8 +293,8 @@
 	/**
 	 * ### - Library method: main()
 	 *
-	 * Reserves a callback function to be fired after all script imports are complete
-	 * @param {callback} [Function]: A callback function to be fired after all scripts are loaded/classes generated
+	 * Reserves a callback function to be fired after all script imports are complete and classes generated
+	 * @param {callback} [Function]: The custom callback
 	 */
 	function main (callback) {
 		if (!Core.started) {
