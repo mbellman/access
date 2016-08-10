@@ -74,13 +74,12 @@
 			var target = objects[0];
 
 			while (objects.length > 2) {
-				A.extend(target, objects[1]);
-				objects.splice(1, 1);
+				A.extend(target, objects.splice(1, 1));
 			}
 
 			var extension = objects[1];
 
-			A.each(extension, function (key, value) {
+			A.each(extension, function(key, value){
 				if (!target.hasOwnProperty(key)) {
 					if (typeof value === 'object') {
 						A.extend((target[key] = {}), value);
