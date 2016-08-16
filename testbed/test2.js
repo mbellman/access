@@ -1,1 +1,0 @@
-var global2 = "Hello 2.";

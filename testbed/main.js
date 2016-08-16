@@ -1,5 +1,7 @@
-include('test.js');
+(function(){
+	var Application = include('Application').from('Application.js');
 
-main(function(){
-	console.log('Done.');
-});
+	main(function(){
+		var application = new Application();
+	});
+})();

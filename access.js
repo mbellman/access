@@ -17,6 +17,17 @@
 		},
 
 		/**
+		 * ## - A.typeOf()
+		 *
+		 * Evaluates whether or not a value is of a particular type
+		 * @param {value} [*] : The value to check against
+		 * @param {type} [String] : The type to check the value against
+		 */
+		typeOf: function (value, type) {
+			return (typeof value === type);
+		},
+
+		/**
 		 * ## - A.func()
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
@@ -29,6 +40,31 @@
 			}
 
 			return assignee;
+		},
+
+		/**
+		 * ## - A.bind()
+		 *
+		 * Returns a context-bound wrapper function
+		 * @param {fn} [Function] : The function to bind the context to
+		 * @param {context} [Object] : The context for the wrapper function
+		 */
+		bind: function (fn, context) {
+			fn = A.func(fn);
+
+			return function wrapper () {
+				return fn.apply(context, arguments);
+			};
+		},
+
+		/**
+		 * ## - A.argsToArray()
+		 *
+		 * Returns a normal array from an arguments list
+		 * @param {args} [Arguments] : A list of arguments
+		 */
+		argsToArray: function (args) {
+			return Array.prototype.slice.call(args, 0);
 		},
 
 		/**
@@ -45,9 +81,15 @@
 		 * Iterates over the elements in an array, passing the element value and the index into a handler function
 		 * @param {list} [Array] : The array to iterate over
 		 * @param {handler(value, index)} [Function] : A handler function to act with the value and index
+		 *
+		 * Optional @param {context} [Object] : A context to bind the handler function to
 		 */
-		each: function (list, handler) {
+		each: function (list, handler, context) {
 			handler = A.func(handler);
+
+			if (context) {
+				handler = A.bind(handler, context);
+			}
 
 			if (A.instanceOf(list, Array)) {
 				for (var i = 0 ; i < list.length ; i++) {
@@ -63,6 +105,27 @@
 		},
 
 		/**
+		 * ## - A.compare()
+		 *
+		 * Compare the properties of an arbitrary number of objects to a target object using a handler function
+		 * (this method is primarily used as a means of refactoring similarities in A.extend() and A.delete())
+		 * @param {objects} [Array:<Object>] : An array of objects, the first of which represents the target object
+		 * @param {handler(key, value)} [Function] : A handler function for each property iteration 
+		 */
+		compare: function (objects, handler) {
+			var target = objects[0];
+
+			while (objects.length > 2) {
+				A.compare([target, objects[1]], handler);
+				objects.splice(1, 1);
+			}
+
+			var reference = objects[1];
+
+			A.each(reference, handler);
+		},
+
+		/**
 		 * ## - A.extend()
 		 *
 		 * Extends a target object with properties from an arbitrary number of other objects (deep & recursive)
@@ -70,22 +133,36 @@
 		 * @param {[object2, [object3, [...]]]} [Object] : Objects used to extend target
 		 */
 		extend: function () {
-			var objects = Array.prototype.slice.call(arguments, 0);
+			var objects = A.argsToArray(arguments);
 			var target = objects[0];
 
-			while (objects.length > 2) {
-				A.extend(target, objects.splice(1, 1));
-			}
-
-			var extension = objects[1];
-
-			A.each(extension, function(key, value){
+			A.compare(objects, function(key, value){
 				if (!target.hasOwnProperty(key)) {
 					if (typeof value === 'object') {
 						A.extend((target[key] = {}), value);
 					} else {
 						target[key] = value;
 					}
+				}
+			});
+
+			return target;
+		},
+
+		/**
+		 * ## - A.delete()
+		 *
+		 * Inverse of A.extend(); removes properties from a target object if they are also included in other objects
+		 * @param {object1} [Object] : The target object
+		 * @param {[object2, [object3, [...]]]} [Object] : Objects with properties to be removed from target
+		 */
+		delete: function () {
+			var objects = A.argsToArray(arguments);
+			var target = objects[0];
+
+			A.compare(objects, function(key, value){
+				if (target.hasOwnProperty(key)) {
+					delete target[key];
 				}
 			});
 
@@ -111,12 +188,133 @@
 	};
 
 	/**
-	 * Collection of library objects and methods to prepare for global scope exposure
+	 * Class access interface
 	 */
-	var AccessUtilities = {
-		include: include,
-		main: main
+	var Classes = {
+		// List of modules pending generation
+		queue: [],
+		// List of module constructors by name
+		defined: {},
+
+		/**
+		 * ## - Classes.has()
+		 *
+		 * Determine whether or not a module constructor has been declared and saved to Classes.defined
+		 * @param {module} [String] : The name of the module constructor
+		 */
+		has: function (module) {
+			return (Classes.defined.hasOwnProperty(module) && A.instanceOf(Classes.defined[module], Function));
+		},
+
+		/**
+		 * ## - Classes.get()
+		 *
+		 * Return a module by name, or undefined if no such module is available
+		 * @param {module} [String] : The name of the module
+		 */
+		get: function (module) {
+			return Classes.defined[module] || undefined;
+		},
+
+		/**
+		 * ## - Classes.onDefined()
+		 *
+		 * Delegate an event handler to run upon the definition of a class
+		 * @param {module} [String] : The class name
+		 * @param {handler(public, private, protected)} [Function] : The event handler, which receives the three member groups defined in the builder function
+		 */
+		onDefined: function (module, handler) {
+			// ...
+		},
+
+		/**
+		 * ## - Classes.buildTemplate()
+		 *
+		 * Sets up a temporary class constructor and delegates an event handler to update the class members upon proper definition
+		 * @param {module} [String] : The class name
+		 */
+		buildTemplate: function (module) {
+			function PublicMemberGroup () {};
+			function PrivateMemberGroup () {};
+			function ProtectedMemberGroup () {};
+
+			var Constructor = function Constructor () {
+				var context = {
+					public: new PublicMemberGroup(),
+					private: new PrivateMemberGroup(),
+					protected: new ProtectedMemberGroup()
+				};
+
+				return context.public;
+			};
+
+			Classes.onDefined(module, function(_public, _private, _protected){
+				A.extend(PublicMemberGroup.prototype, _public);
+				A.extend(PrivateMemberGroup.prototype, _private);
+				A.extend(ProtectedMemberGroup.prototype, _protected);
+			});
+
+			Classes.defined[module] = Constructor;
+		}
 	};
+
+	/**
+	 * ## - ClassDefinition()
+	 *
+	 * A special internal constructor which offers the base and chainable methods for class definition tools
+	 * @param {name} [String] : The class name
+	 */
+	function ClassDefinition (name) {
+		// [String] : The class name
+		this.name = name;
+		// [Array:<String>] : Base classes to extend
+		this.extends = [];
+		// [String] : Interface to implement
+		this.implements = null;
+		// [Function(public, private, protected)] : A function which defines the class members
+		this.builder = function () {};
+
+		/**
+		 * ## - definer()
+		 *
+		 * An internal method which receives a builder function to define the members of the class
+		 * @param {builder(public, private, protected)} [Function] : The class builder function
+		 */
+		var definer = A.bind(function(builder){
+			this.builder = builder;
+			Classes.queue.push(this);
+		}, this);
+
+		/**
+		 * ## - definer.extend()
+		 *
+		 * Used to extend a class definition with an arbitrary number of base classes
+		 * @param {classes} [String] : A comma-delimited list of base classes to extend onto the new class
+		 */
+		definer.extends = A.bind(function(classes){
+			classes = classes.replace(/\s/g, '').split(',');
+
+			A.each(classes, function(name){
+				this.extends.push(name);
+			}, this);
+
+			return definer;
+		}, this);
+
+		/**
+		 * ## - definer.implements()
+		 *
+		 * Used to implement an interface
+		 * @param {_interface} [String] : The interface name
+		 */
+		definer.implements = A.bind(function(_interface){
+			this.implements = _interface;
+			return definer;
+		}, this);
+
+		return definer;
+	}
+
 
 	/**
 	 * Configuration and methods arbitrating script imports
@@ -124,13 +322,34 @@
 	var Imports = {
 		// Static root filepath
 		root: '.',
-		// List of script file names as imported via include()
+		// List of script file names as imported via Imports.from()
 		scripts: [],
 		// Number of still-pending script imports
 		pending: 0,
 		// Timeout before verifying that all external script
 		// loading has finished/application can be started
 		doneTimer: null,
+
+		/**
+		 * ## - Imports.from()
+		 *
+		 * Starts an asynchronous script load request and returns a tentative or complete module constructor; chained to include()
+		 * @param {file} [String] : Script path from Imports.root
+		 * @param {module} [String] : The name of the module constructor
+		 */
+		from: function (file, module) {
+			var script = Imports.root + '/' + file;
+
+			if (!A.isInArray(Imports.scripts, script)) {
+				Core.load(script);
+			}
+
+			if (A.typeOf(module, 'string') && !Classes.has(module)) {
+				Classes.buildTemplate(module);
+			}
+
+			return Classes.get(module);
+		},
 
 		/**
 		 * ## - Imports.checkIfDone()
@@ -159,10 +378,7 @@
 
 					if (--Imports.pending <= 0) {
 						window.clearTimeout(Imports.doneTimer);
-
-						Imports.doneTimer = window.setTimeout(
-							Imports.checkIfDone, 250
-						);
+						Imports.doneTimer = window.setTimeout(Imports.checkIfDone, 250);
 					}
 				};
 			},
@@ -203,6 +419,28 @@
 		 * A placeholder for the application entry point callback reserved by main()
 		 */
 		main: A.func(),
+
+		/**
+		 * ## - Core.init()
+		 *
+		 * Cleans up global exports and starts application 
+		 */
+		init: function () {
+			Core.started = true;
+			A.delete(window, AccessUtilities);
+			Core.main();
+		},
+
+		/**
+		 * ## - Core.generate()
+		 *
+		 * Starts the class generation process
+		 */
+		generate: function () {
+			// ...
+
+			Core.init();
+		},
 
 		/**
 		 * DOM-related routines
@@ -255,38 +493,22 @@
 			script.src = file;
 
 			Core.DOM.append(script);
-		},
-
-		/**
-		 * ## - Core.generate()
-		 *
-		 * Starts the class generation process
-		 */
-		generate: function () {
-			// ...
-
-			Core.main();
 		}
 	};
 
 	/**
 	 * ### - Library method: include()
 	 *
-	 * Asynchronously loads one or multiple script files by passing the path(s) into Core.load()
-	 * @param {file} [String, Array] : The root-relative path(s) to the script file(s)
+	 * Specifies a module to be included from a particular script; returns a chainable
+	 * method for specifying the script file path which invokes Imports.from()
+	 * @param {module} [String] : The name of the module
 	 */
-	function include (file) {
-		if (A.instanceOf(file, Array)) {
-			A.each(file, function(script){
-				include(script);
-			});
-		} else {
-			var script = Imports.root + '/' + file;
-
-			if (!A.isInArray(Imports.scripts, script)) {
-				Core.load(script);
+	function include (module) {
+		return {
+			from: function (file) {
+				return Imports.from(file, module);
 			}
-		}
+		};
 	}
 
 	/**
@@ -300,6 +522,25 @@
 			Core.main = A.func(callback);
 		}
 	}
+
+	/**
+	 * ### - Library method: Class()
+	 *
+	 * Returns an instance of the internal ClassDefinition utility
+	 * @param {name} [String] : The name of the class
+	 */
+	function Class (name) {
+		return new ClassDefinition(name);
+	}
+
+	/**
+	 * Collection of library objects and methods to prepare for global scope exposure
+	 */
+	var AccessUtilities = {
+		include: include,
+		main: main,
+		Class: Class
+	};
 
 	// Export library utilities to the global scope
 	A.extend(window, AccessUtilities);
