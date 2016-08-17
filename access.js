@@ -2,6 +2,17 @@
 	'use strict';
 
 	/**
+	 * ## - AccessException()
+	 *
+	 * An internal Error handler utility
+	 */
+	function AccessException (error) {
+		this.toString = function () {
+			return 'Access.js Exception: ' + error;
+		};
+	}
+
+	/**
 	 * A private namespace of convenience methods for internal library use only
 	 */
 	var A = {
@@ -35,7 +46,7 @@
 		 * @param {assignee} [*] : The variable to check against
 		 */
 		func: function (assignee) {
-			if (typeof assignee !== 'function') {
+			if (!A.typeOf(assignee, 'function')) {
 				return function () {};
 			}
 
@@ -55,6 +66,30 @@
 			return function wrapper () {
 				return fn.apply(context, arguments);
 			};
+		},
+
+		/**
+		 * ## - A.bindAll()
+		 *
+		 * Binds a specific context to an arbitrary number of methods, properties of the context object
+		 * @param {context} [Object] : The context for the methods
+		 * @param {[method1, [method2, [...]]]} [String] : The names of the target methods as properties (keys) of the context object
+		 */
+		bindAll: function () {
+			var args = A.argsToArray(arguments);
+
+			var context = args[0];
+
+			while (args.length > 1) {
+				var methodName = args[1];
+				var method = context[methodName];
+
+				if (A.typeOf(method, 'function')) {
+					context[methodName] = A.bind(method, context);
+				}
+
+				args.splice(1, 1);
+			}
 		},
 
 		/**
@@ -95,7 +130,7 @@
 				for (var i = 0 ; i < list.length ; i++) {
 					handler(list[i], i);
 				}
-			} else if (A.instanceOf(list, Object) && !A.instanceOf(list, Function)) {
+			} else if (A.instanceOf(list, Object) && !A.typeOf(list, 'function')) {
 				for (var key in list) {
 					if (list.hasOwnProperty(key)) {
 						handler(key, list[key]);
@@ -138,7 +173,7 @@
 
 			A.compare(objects, function(key, value){
 				if (!target.hasOwnProperty(key)) {
-					if (typeof value === 'object') {
+					if (A.typeOf(value, 'object')) {
 						A.extend((target[key] = {}), value);
 					} else {
 						target[key] = value;
@@ -188,57 +223,148 @@
 	};
 
 	/**
-	 * Class access interface
+	 * Module utilities
 	 */
-	var Classes = {
-		// List of modules pending generation
-		queue: [],
-		// List of module constructors by name
+	var Modules = {
+		// [Object{String}] : Module type variants
+		types: {
+			CLASS: 'Class',
+			FINAL_CLASS: 'Final Class',
+			ABSTRACT_CLASS: 'Abstract Class',
+			INTERFACE: 'Interface',
+
+			// [Array<String>] : Module types which can be instantiated
+			instantiable: [
+				'Class',
+				'Final Class'
+			]
+		},
+
+		// [Object{Object}] : Event queues
+		events: {
+			// [Array<String>] : Valid event names
+			valid: ['built', 'defined'],
+			// [Object{Array<Function>}] : Event handlers run upon a module's builder() method having fired
+			built: {},
+			// [Object{Array<Function>}] : Event handlers run upon a module's definition
+			defined: {},
+
+			/**
+			 * Modules.events.on()
+			 *
+			 * Delegates a new event handler for a specific module event
+			 * @param {event} [String] : The event name
+			 * @param {module} [String] : The module name
+			 * @param {handler(arg1, arg2, ...)} [Function] : The event handler
+			 */
+			on: function (event, module, handler) {
+				if (A.isInArray(Modules.events.valid, event)) {
+					if (A.typeOf(handler, 'function')) {
+						var eventQueue = Modules.events[event];
+
+						if (!eventQueue.hasOwnProperty(module)) {
+							eventQueue[module] = [];
+						}
+
+						eventQueue[module].push(handler);
+					}
+				}
+			},
+
+			/**
+			 * Modules.events.trigger()
+			 *
+			 * Fires all event handlers for a specific module event
+			 * @param {event} [String] : The event name
+			 * @param {module} [String] : The module name
+			 * @param {args} [Array<*>] : An array of arguments to be provided to the event handlers as a normal [Arguments] lineup
+			 */
+			trigger: function (event, module, args) {
+				if (A.isInArray(Modules.events.valid, event)) {
+					var eventQueue = Modules.events[event];
+
+					if (eventQueue.hasOwnProperty(module)) {
+						A.each(eventQueue[module], function(handler){
+							handler.apply(null, args);
+						});
+					}
+				}
+			}
+		},
+
+		// [Object{ClassDefinition OR InterfaceDefinition}] : List of modules pending generation
+		queue: {},
+		// [Object{Function}] : List of module constructors by name
 		defined: {},
+		// [Object{String}] : List of module types by name
+		definedTypes: {},
 
 		/**
-		 * ## - Classes.has()
+		 * ## - Modules.isReady()
 		 *
-		 * Determine whether or not a module constructor has been declared and saved to Classes.defined
-		 * @param {module} [String] : The name of the module constructor
+		 * Determine whether or not a module has been defined and removed from the pending queue
+		 * @param {module} [String] : The module name
+		 */
+		isReady: function (module) {
+			return (Modules.has(module) && !Modules.queue.hasOwnProperty(module));
+		},
+
+		/**
+		 * ## - Modules.has()
+		 *
+		 * Determine whether or not a module has been declared and saved to Modules.defined
+		 * @param {module} [String] : The module name
 		 */
 		has: function (module) {
-			return (Classes.defined.hasOwnProperty(module) && A.instanceOf(Classes.defined[module], Function));
+			return (Modules.defined.hasOwnProperty(module) && A.typeOf(Modules.defined[module], 'function'));
 		},
 
 		/**
-		 * ## - Classes.get()
+		 * ## - Modules.get()
 		 *
-		 * Return a module by name, or undefined if no such module is available
-		 * @param {module} [String] : The name of the module
+		 * Return a module by name, or null if no such module is available
+		 * @param {module} [String] : The module name
 		 */
 		get: function (module) {
-			return Classes.defined[module] || undefined;
+			return Modules.defined[module] || null;
 		},
 
 		/**
-		 * ## - Classes.onDefined()
+		 * ## - Modules.typeOf()
 		 *
-		 * Delegate an event handler to run upon the definition of a class
-		 * @param {module} [String] : The class name
-		 * @param {handler(public, private, protected)} [Function] : The event handler, which receives the three member groups defined in the builder function
+		 * Return the type of a module by name, or null if no such module is available
+		 * @param {module} [String] : The module name
 		 */
-		onDefined: function (module, handler) {
-			// ...
+		typeOf: function (module) {
+			return Modules.definedTypes[module] || null;
 		},
 
 		/**
-		 * ## - Classes.buildTemplate()
+		 * ## - Modules.buildModuleTemplate()
 		 *
-		 * Sets up a temporary class constructor and delegates an event handler to update the class members upon proper definition
-		 * @param {module} [String] : The class name
+		 * Sets up a temporary module constructor and delegates an event handler to update the module upon proper definition
+		 * @param {module} [String] : The module name
 		 */
-		buildTemplate: function (module) {
+		buildModuleTemplate: function (module) {
+			if (Modules.has(module)) {
+				return;
+			}
+
 			function PublicMemberGroup () {};
 			function PrivateMemberGroup () {};
 			function ProtectedMemberGroup () {};
 
-			var Constructor = function Constructor () {
+			function Constructor () {
+				var type = Modules.typeOf(module);
+
+				try {
+					if (!A.isInArray(Modules.types.instantiable, type)) {
+						throw new AccessException('Cannot instantiate ' + type + ': {' + module + '}');
+					}
+				} catch (exception) {
+					throw new Error(exception);
+				}
+
 				var context = {
 					public: new PublicMemberGroup(),
 					private: new PrivateMemberGroup(),
@@ -246,56 +372,224 @@
 				};
 
 				return context.public;
-			};
+			}
 
-			Classes.onDefined(module, function(_public, _private, _protected){
+			Modules.events.on('built', module, function(_public, _private, _protected){
 				A.extend(PublicMemberGroup.prototype, _public);
 				A.extend(PrivateMemberGroup.prototype, _private);
 				A.extend(ProtectedMemberGroup.prototype, _protected);
 			});
 
-			Classes.defined[module] = Constructor;
+			Modules.defined[module] = Constructor;
+		},
+
+		/**
+		 * ## - Modules.buildModule()
+		 *
+		 * Properly defines a module by kicking off its builder function
+		 * @param {module} [String] : The module name
+		 */
+		buildModule: function (module) {
+			if (Modules.queue.hasOwnProperty(module)) {
+				Modules.queue[module].build();
+			}
+		},
+
+		/**
+		 * ## - Modules.getDefiner()
+		 *
+		 * Returns a special function which receives and stores a builder function for a module. In the case of classes,
+		 * this function will have additional properties applied to it which offer chainable class customization methods.
+		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
+		 */
+		getDefiner: function () {
+			return function definer (builder) {
+				this.builder = builder;
+				Modules.queue[this.name] = this;
+			};
+		},
+
+		/**
+		 * ## - Modules.defineModules()
+		 *
+		 * Defines all modules
+		 */
+		defineModules: function () {
+			A.each(Modules.queue, function(module, definition){
+				definition.checkReadyStatus();
+			});
 		}
 	};
+
+	/**
+	 * ## - InterfaceDefinition()
+	 *
+	 * A special internal constructor which provides an interface definition method
+	 * @param {name} [String] : The interface name
+	 * @returns {definer} [Function] : (See: definer())
+	 */
+	function InterfaceDefinition (name) {
+		Modules.buildModuleTemplate(name);
+
+		// [String] : The interface name
+		this.name = name;
+		// [Function(void)] : A function which defines the interface members
+		this.builder = A.func();
+
+		this.build = function(){
+
+		};
+
+		/**
+		 * ## - definer()
+		 *
+		 * An internal method which receives a builder function to define the members of the interface; exposed by the InterfaceDefinition constructor
+		 * @param {builder(void)} [Function] : The interface builder function
+		 */
+		var definer = A.bind(Modules.getDefiner(), this);
+
+		A.bindAll(this, 'build');
+
+		return definer;
+	}
 
 	/**
 	 * ## - ClassDefinition()
 	 *
 	 * A special internal constructor which offers the base and chainable methods for class definition tools
 	 * @param {name} [String] : The class name
+	 * @returns {definer} [Function] : (See: definer())
 	 */
-	function ClassDefinition (name) {
+	function ClassDefinition (name, type) {
+		Modules.buildModuleTemplate(name);
+
 		// [String] : The class name
 		this.name = name;
-		// [Array:<String>] : Base classes to extend
+		// [String] : The class type; defaults to 'Class'
+		this.type = type || Modules.types.CLASS;
+		// [Array<String>] : Base classes to extend
 		this.extends = [];
 		// [String] : Interface to implement
 		this.implements = null;
 		// [Function(public, private, protected)] : A function which defines the class members
-		this.builder = function () {};
+		this.builder = A.func();
+
+		/**
+		 * ## - ClassDefinition.validate()
+		 *
+		 * Prevents name collisions and ensures that extending classes/interfaces are specified appropriately
+		 * @returns [Boolean] : Class definition validity
+		 * @throws [AccessException]
+		 */
+		this.validate = function () {
+			try {
+				if (Modules.definedTypes.hasOwnProperty(this.name)) {
+					throw new AccessException('Class {' + this.name + '} defined more than once');
+				}
+
+				A.each(this.extends, function(value){
+					if (Modules.definedTypes[value] === Modules.types.INTERFACE) {
+						throw new AccessException('Interface {' + value + '} cannot be extended (Class: {' + this.name + '})');
+					}
+				}, this);
+
+				if (this.implements && Modules.definedTypes[this.implements] !== Modules.types.INTERFACE) {
+					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented (Class: {' + this.name + '})');
+				}
+			} catch (exception) {
+				throw new Error(exception);
+			}
+
+			return true;
+		};
+
+		/**
+		 * ## - ClassDefinition.build()
+		 *
+		 * Sets up the class members via this.builder(), passes the modified member objects into the module's "built" event
+		 * handler for attachment to the MemberGroup prototypes, and finally triggers the module's "defined" event to
+		 * potentially kick off builds of modules which extend this one. Manually called via Modules.build().
+		 */
+		this.build = function () {
+			if (this.validate()) {
+				var members = {
+					public: {
+						static: {},
+						final: {}
+					},
+					private: {
+						static: {}
+					},
+					protected: {
+						static: {},
+						final: {}
+					}
+				};
+
+				delete Modules.queue[this.name];
+				Modules.definedTypes[this.name] = this.type;
+
+				// TODO: Attach base class/interface members to the member objects before calling this.builder()
+
+				this.builder(members.public, members.private, members.protected);
+
+				Modules.events.trigger('built', this.name, [members.public, members.private, members.protected]);
+				Modules.events.trigger('defined', this.name, [this.name]);
+			}
+		};
+
+		/**
+		 * ## - ClassDefinition.allExtensionsDefined()
+		 *
+		 * Determine whether all extending classes have been defined
+		 * @returns {ready} [Boolean] : State representing the readiness of all extending classes
+		 */
+		this.allExtensionsDefined = function () {
+			var ready = true;
+
+			A.each(this.extends, function(module){
+				if (!Modules.isReady(module)) {
+					ready = false;
+				}
+			});
+
+			return ready;
+		};
+
+		/**
+		 * ## - ClassDefinition.checkReadyStatus()
+		 *
+		 * Check to see whether class is ready to be defined
+		 */
+		this.checkReadyStatus = function () {
+			if (this.allExtensionsDefined()) {
+				if (this.implements === null || Modules.isReady(this.implements)) {
+					Modules.buildModule(this.name);
+				}
+			}
+		};
 
 		/**
 		 * ## - definer()
 		 *
-		 * An internal method which receives a builder function to define the members of the class
+		 * An internal method which receives a builder function to define the members of the class; exposed by the ClassDefinition constructor
 		 * @param {builder(public, private, protected)} [Function] : The class builder function
 		 */
-		var definer = A.bind(function(builder){
-			this.builder = builder;
-			Classes.queue.push(this);
-		}, this);
+		var definer = A.bind(Modules.getDefiner(), this);
 
 		/**
-		 * ## - definer.extend()
+		 * ## - definer.extends()
 		 *
 		 * Used to extend a class definition with an arbitrary number of base classes
 		 * @param {classes} [String] : A comma-delimited list of base classes to extend onto the new class
+		 * @returns {definer} [Function] : The definer() method
 		 */
 		definer.extends = A.bind(function(classes){
 			classes = classes.replace(/\s/g, '').split(',');
 
 			A.each(classes, function(name){
 				this.extends.push(name);
+				Modules.events.on('defined', name, this.checkReadyStatus);
 			}, this);
 
 			return definer;
@@ -306,28 +600,30 @@
 		 *
 		 * Used to implement an interface
 		 * @param {_interface} [String] : The interface name
+		 * @returns {definer} [Function] : The definer() method
 		 */
 		definer.implements = A.bind(function(_interface){
 			this.implements = _interface;
+			Modules.events.on('defined', _interface, this.checkReadyStatus);
 			return definer;
 		}, this);
 
+		A.bindAll(this, 'validate', 'build', 'allExtensionsDefined', 'checkReadyStatus');
+
 		return definer;
 	}
-
 
 	/**
 	 * Configuration and methods arbitrating script imports
 	 */
 	var Imports = {
-		// Static root filepath
+		// [String] : Static root filepath
 		root: '.',
-		// List of script file names as imported via Imports.from()
+		// [Array<String>] : List of script file names as imported via Imports.from()
 		scripts: [],
-		// Number of still-pending script imports
+		// [Number] : Number of still-pending script imports
 		pending: 0,
-		// Timeout before verifying that all external script
-		// loading has finished/application can be started
+		// [WindowTimer] : Timeout before verifying that all external script loading has finished/application can be started
 		doneTimer: null,
 
 		/**
@@ -341,14 +637,32 @@
 			var script = Imports.root + '/' + file;
 
 			if (!A.isInArray(Imports.scripts, script)) {
-				Core.load(script);
+				Imports.load(script);
 			}
 
-			if (A.typeOf(module, 'string') && !Classes.has(module)) {
-				Classes.buildTemplate(module);
+			if (A.typeOf(module, 'string') && !Modules.has(module)) {
+				Modules.buildModuleTemplate(module);
 			}
 
-			return Classes.get(module);
+			return Modules.get(module);
+		},
+
+		/**
+		 * ## - Imports.load()
+		 *
+		 * Asynchronously loads a JavaScript file, updating Imports.scripts and Imports.pending
+		 * @param {file} [String] : Script file path
+		 */
+		load: function (file) {
+			Imports.scripts.push(file);
+			Imports.pending++;
+
+			var script = Core.DOM.create('script');
+			script.onload = Imports.on.loadedOne(script);
+			script.onerror = Imports.on.error(script);
+			script.src = file;
+
+			Core.DOM.append(script);
 		},
 
 		/**
@@ -423,21 +737,24 @@
 		/**
 		 * ## - Core.init()
 		 *
-		 * Cleans up global exports and starts application 
+		 * Calls main entry point function
 		 */
 		init: function () {
 			Core.started = true;
-			A.delete(window, AccessUtilities);
 			Core.main();
 		},
 
 		/**
 		 * ## - Core.generate()
 		 *
-		 * Starts the class generation process
+		 * Cleans up global exports and starts the class generation process
 		 */
 		generate: function () {
-			// ...
+			A.delete(window, AccessUtilities);
+			Modules.defineModules();
+
+			// TODO: Check for still-undefined modules and throw
+			// errors concerning their tentative definitions.
 
 			Core.init();
 		},
@@ -475,24 +792,6 @@
 			remove: function (node) {
 				document.body.removeChild(node);
 			}
-		},
-
-		/**
-		 * ## - Core.load()
-		 *
-		 * Asynchronously loads a JavaScript file, updating Imports.scripts and Imports.pending
-		 * @param {file} [String] : Script file path
-		 */
-		load: function (file) {
-			Imports.scripts.push(file);
-			Imports.pending++;
-
-			var script = Core.DOM.create('script');
-			script.onload = Imports.on.loadedOne(script);
-			script.onerror = Imports.on.error(script);
-			script.src = file;
-
-			Core.DOM.append(script);
 		}
 	};
 
@@ -534,12 +833,23 @@
 	}
 
 	/**
+	 * ### - Library method: Interface()
+	 *
+	 * Returns an instance of the internal InterfaceDefinition utility
+	 * @param {name} [String] : The name of the interface
+	 */
+	function Interface (name) {
+		return new InterfaceDefinition(name);
+	}
+
+	/**
 	 * Collection of library objects and methods to prepare for global scope exposure
 	 */
 	var AccessUtilities = {
 		include: include,
 		main: main,
-		Class: Class
+		Class: Class,
+		Interface: Interface
 	};
 
 	// Export library utilities to the global scope

@@ -3,5 +3,8 @@
 
 	main(function(){
 		var application = new Application();
+
+		application.start();
+		application.stop();
 	});
 })();
