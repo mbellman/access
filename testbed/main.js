@@ -4,7 +4,7 @@
 	main(function(){
 		var application = new Application();
 
-		application.start();
-		application.stop();
+		application.setNumber(18, 5);
+		application.reveal();
 	});
 })();

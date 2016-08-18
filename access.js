@@ -73,7 +73,7 @@
 		 *
 		 * Binds a specific context to an arbitrary number of methods, properties of the context object
 		 * @param {context} [Object] : The context for the methods
-		 * @param {[method1, [method2, [...]]]} [String] : The names of the target methods as properties (keys) of the context object
+		 * @param {[method1, [method2, [...]]]} [String] : The names of the target methods as properties (key names) of the context object
 		 */
 		bindAll: function () {
 			var args = A.argsToArray(arguments);
@@ -90,6 +90,21 @@
 
 				args.splice(1, 1);
 			}
+		},
+
+		/**
+		 * ## - A.bindAllMethods()
+		 *
+		 * Iterates over the properties of an object looking for functions, and binds each to a particular context
+		 * @param {object} [Object] : The object to iterate over
+		 * @param {context} [Object] : The context for the functions
+		 */
+		bindAllMethods: function (object, context) {
+			A.each(object, function(key, value){
+				if (A.typeOf(value, 'function')) {
+					object[key] = A.bind(value, context);
+				}
+			});
 		},
 
 		/**
@@ -182,6 +197,20 @@
 			});
 
 			return target;
+		},
+
+		/**
+		 * ## - A.extendEach()
+		 *
+		 * Invokes A.extend() on each of a list of object Arrays containing arguments to be passed into the method
+		 * @param {[array1, [array2, [...]]]} [Array<Object>] : An array containing objects for the A.extend() call
+		 */
+		extendEach: function () {
+			var args = A.argsToArray(arguments);
+
+			A.each(args, function(objects){
+				A.extend.apply(null, objects);
+			});
 		},
 
 		/**
@@ -342,7 +371,7 @@
 		/**
 		 * ## - Modules.buildModuleTemplate()
 		 *
-		 * Sets up a temporary module constructor and delegates an event handler to update the module upon proper definition
+		 * Sets up the module constructor and delegates an event handler to update the module members upon running its builder function
 		 * @param {module} [String] : The module name
 		 */
 		buildModuleTemplate: function (module) {
@@ -350,34 +379,55 @@
 				return;
 			}
 
-			function PublicMemberGroup () {};
-			function PrivateMemberGroup () {};
-			function ProtectedMemberGroup () {};
+			var members = {
+				public: {},
+				private: {},
+				protected: {}
+			};
 
 			function Constructor () {
-				var type = Modules.typeOf(module);
-
 				try {
+					var type = Modules.typeOf(module);
+
 					if (!A.isInArray(Modules.types.instantiable, type)) {
 						throw new AccessException('Cannot instantiate ' + type + ': {' + module + '}');
 					}
 				} catch (exception) {
-					throw new Error(exception);
+					Core.error(exception);
+					return;
 				}
 
 				var context = {
-					public: new PublicMemberGroup(),
-					private: new PrivateMemberGroup(),
-					protected: new ProtectedMemberGroup()
+					public: {}
 				};
+
+				A.extend(context.public, members.public);
+				A.bindAllMethods(context.public, context);
+				A.extend(context, context.public, members.private, members.protected);
+
+				// TODO: Make a special function for this
+				A.each(context.public, function(key, value){
+					Object.defineProperty(context, key, {
+						configurable: true,
+						get: function () {
+							return this.val;
+						},
+						set: function(literal) {
+							this.val = literal;
+							context.public[key] = literal;
+						}
+					});
+				});
 
 				return context.public;
 			}
 
 			Modules.events.on('built', module, function(_public, _private, _protected){
-				A.extend(PublicMemberGroup.prototype, _public);
-				A.extend(PrivateMemberGroup.prototype, _private);
-				A.extend(ProtectedMemberGroup.prototype, _protected);
+				A.extendEach(
+					[members.public, _public],
+					[members.private, _private],
+					[members.protected, _protected]
+				);
 			});
 
 			Modules.defined[module] = Constructor;
@@ -497,7 +547,8 @@
 					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented (Class: {' + this.name + '})');
 				}
 			} catch (exception) {
-				throw new Error(exception);
+				Console.error(exception);
+				return false;
 			}
 
 			return true;
@@ -757,6 +808,16 @@
 			// errors concerning their tentative definitions.
 
 			Core.init();
+		},
+
+		/**
+		 * ## - Core.error()
+		 *
+		 * Logs an exception string
+		 * @param {error} [Exception] : A thrown Exception instance
+		 */
+		exception: function (error) {
+			console.error(error.toString());
 		},
 
 		/**
