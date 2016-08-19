@@ -13,7 +13,7 @@
 	}
 
 	/**
-	 * A private namespace of convenience methods for internal library use only
+	 * Convenience methods for internal library use only
 	 */
 	var A = {
 		/**
@@ -278,6 +278,198 @@
 	};
 
 	/**
+	 * Internal core variables and library routines
+	 */
+	var Core = {
+		// Whether or not the main() application entry point callback has been fired
+		started: false,
+
+		/**
+		 * ## - Core.main()
+		 *
+		 * A placeholder for the application entry point callback reserved by main()
+		 */
+		main: A.func(),
+
+		/**
+		 * ## - Core.init()
+		 *
+		 * Calls main entry point function
+		 */
+		init: function () {
+			Core.started = true;
+			Core.main();
+		},
+
+		/**
+		 * ## - Core.generate()
+		 *
+		 * Cleans up global exports and starts the class generation process
+		 */
+		generate: function () {
+			A.delete(window, AccessUtilities);
+			Modules.defineModules();
+
+			// TODO: Check for still-undefined modules and throw
+			// errors concerning their tentative definitions.
+
+			Core.init();
+		},
+
+		/**
+		 * ## - Core.exception()
+		 *
+		 * Logs an exception string
+		 * @param {exception} [Exception] : A thrown Exception instance
+		 */
+		exception: function (exception) {
+			console.error(exception.toString());
+		},
+
+		/**
+		 * DOM-related routines
+		 */
+		DOM: {
+			/**
+			 * ## - Core.DOM.create()
+			 *
+			 * Create and return a new DOM element
+			 * @param {type} [String] : The element tag type
+			 */
+			create: function (type) {
+				return document.createElement(type);
+			},
+
+			/**
+			 * ## - Core.DOM.append()
+			 *
+			 * Append a new child element node to the DOM
+			 * @param {node} [HTMLElement] : The child element node to append
+			 */
+			append: function (node) {
+				document.body.appendChild(node);
+			},
+
+			/**
+			 * ## - Core.DOM.remove()
+			 *
+			 * Remove an existing child element node from the DOM
+			 * @param {node} [HTMLElement]: The child element node to remove
+			 */
+			remove: function (node) {
+				document.body.removeChild(node);
+			}
+		}
+	};
+
+	/**
+	 * Configuration and methods arbitrating script imports
+	 */
+	var Imports = {
+		// [String] : Static root filepath
+		root: '.',
+		// [Array<String>] : List of script file names as imported via Imports.from()
+		scripts: [],
+		// [Number] : Number of still-pending script imports
+		pending: 0,
+		// [WindowTimer] : Timeout before verifying that all external script loading has finished/application can be started
+		doneTimer: null,
+
+		/**
+		 * ## - Imports.from()
+		 *
+		 * Starts an asynchronous script load request and returns a tentative or complete module constructor; chained to include()
+		 * @param {file} [String] : Script path from Imports.root
+		 * @param {module} [String] : The name of the module constructor
+		 */
+		from: function (file, module) {
+			var script = Imports.root + '/' + file;
+
+			if (!A.isInArray(Imports.scripts, script)) {
+				Imports.load(script);
+			}
+
+			if (A.typeOf(module, 'string') && !Modules.has(module)) {
+				Modules.buildModuleTemplate(module);
+			}
+
+			return Modules.get(module);
+		},
+
+		/**
+		 * ## - Imports.load()
+		 *
+		 * Asynchronously loads a JavaScript file, updating Imports.scripts and Imports.pending
+		 * @param {file} [String] : Script file path
+		 */
+		load: function (file) {
+			Imports.scripts.push(file);
+			Imports.pending++;
+
+			var script = Core.DOM.create('script');
+			script.onload = Imports.on.loadedOne(script);
+			script.onerror = Imports.on.error(script);
+			script.src = file;
+
+			Core.DOM.append(script);
+		},
+
+		/**
+		 * ## - Imports.checkIfDone()
+		 *
+		 * Verifies that no script imports are still pending, and if so
+		 * calls the Imports.on.loadedAll completion handler
+		 */
+		checkIfDone: function () {
+			if (Imports.pending === 0) {
+				Imports.on.loadedAll();
+			}
+		},
+
+		// Script load status handlers
+		on: {
+			/**
+			 * ## - Imports.on.loadedOne()
+			 *
+			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
+			 * decrements Imports.pending, and queues the Imports.checkIfDone process if no remaining scripts are pending
+			 * @param {script} [HTMLElement] : The script tag to remove
+			 */
+			loadedOne: function (script) {
+				return function () {
+					Core.DOM.remove(script);
+
+					if (--Imports.pending <= 0) {
+						window.clearTimeout(Imports.doneTimer);
+						Imports.doneTimer = window.setTimeout(Imports.checkIfDone, 250);
+					}
+				};
+			},
+
+			/**
+			 * ## - Imports.on.loadedAll()
+			 *
+			 * Event handler for full script import completion; kicks off the class generation process
+			 */
+			loadedAll: function () {
+				Core.generate();
+			},
+
+			/**
+			 * ## - Imports.on.error()
+			 *
+			 * Returns a custom single-script load error handler function which warns about the script file path
+			 * @param {script} [HTMLElement] : The script tag to reference
+			 */
+			error: function (script) {
+				return function () {
+					console.warn('Failed to load: ' + script.src);
+				};
+			}
+		}
+	};
+
+	/**
 	 * Module utilities
 	 */
 	var Modules = {
@@ -309,21 +501,21 @@
 			 * Modules.events.on()
 			 *
 			 * Delegates a new event handler for a specific module event
-			 * @param {event} [String] : The event name
+			 * @param {event} [String] : The event type
 			 * @param {module} [String] : The module name
 			 * @param {handler(arg1, arg2, ...)} [Function] : The event handler
 			 */
 			on: function (event, module, handler) {
 				if (A.isInArray(Modules.events.valid, event)) {
-					if (A.typeOf(handler, 'function')) {
-						var eventQueue = Modules.events[event];
+					handler = A.func(handler);
 
-						if (!eventQueue.hasOwnProperty(module)) {
-							eventQueue[module] = [];
-						}
+					var eventQueue = Modules.events[event];
 
-						eventQueue[module].push(handler);
+					if (!eventQueue.hasOwnProperty(module)) {
+						eventQueue[module] = [];
 					}
+
+					eventQueue[module].push(handler);
 				}
 			},
 
@@ -331,7 +523,7 @@
 			 * Modules.events.trigger()
 			 *
 			 * Fires all event handlers for a specific module event
-			 * @param {event} [String] : The event name
+			 * @param {event} [String] : The event type
 			 * @param {module} [String] : The module name
 			 * @param {args} [Array<*>] : An array of arguments to be provided to the event handlers as a normal [Arguments] lineup
 			 */
@@ -705,198 +897,6 @@
 
 		return definer;
 	}
-
-	/**
-	 * Configuration and methods arbitrating script imports
-	 */
-	var Imports = {
-		// [String] : Static root filepath
-		root: '.',
-		// [Array<String>] : List of script file names as imported via Imports.from()
-		scripts: [],
-		// [Number] : Number of still-pending script imports
-		pending: 0,
-		// [WindowTimer] : Timeout before verifying that all external script loading has finished/application can be started
-		doneTimer: null,
-
-		/**
-		 * ## - Imports.from()
-		 *
-		 * Starts an asynchronous script load request and returns a tentative or complete module constructor; chained to include()
-		 * @param {file} [String] : Script path from Imports.root
-		 * @param {module} [String] : The name of the module constructor
-		 */
-		from: function (file, module) {
-			var script = Imports.root + '/' + file;
-
-			if (!A.isInArray(Imports.scripts, script)) {
-				Imports.load(script);
-			}
-
-			if (A.typeOf(module, 'string') && !Modules.has(module)) {
-				Modules.buildModuleTemplate(module);
-			}
-
-			return Modules.get(module);
-		},
-
-		/**
-		 * ## - Imports.load()
-		 *
-		 * Asynchronously loads a JavaScript file, updating Imports.scripts and Imports.pending
-		 * @param {file} [String] : Script file path
-		 */
-		load: function (file) {
-			Imports.scripts.push(file);
-			Imports.pending++;
-
-			var script = Core.DOM.create('script');
-			script.onload = Imports.on.loadedOne(script);
-			script.onerror = Imports.on.error(script);
-			script.src = file;
-
-			Core.DOM.append(script);
-		},
-
-		/**
-		 * ## - Imports.checkIfDone()
-		 *
-		 * Verifies that no script imports are still pending, and if so
-		 * calls the Imports.on.loadedAll completion handler
-		 */
-		checkIfDone: function () {
-			if (Imports.pending === 0) {
-				Imports.on.loadedAll();
-			}
-		},
-
-		// Script load status handlers
-		on: {
-			/**
-			 * ## - Imports.on.loadedOne()
-			 *
-			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
-			 * decrements Imports.pending, and queues the Imports.checkIfDone process if no remaining scripts are pending
-			 * @param {script} [HTMLElement] : The script tag to remove
-			 */
-			loadedOne: function (script) {
-				return function () {
-					Core.DOM.remove(script);
-
-					if (--Imports.pending <= 0) {
-						window.clearTimeout(Imports.doneTimer);
-						Imports.doneTimer = window.setTimeout(Imports.checkIfDone, 250);
-					}
-				};
-			},
-
-			/**
-			 * ## - Imports.on.loadedAll()
-			 *
-			 * Event handler for full script import completion; kicks off the class generation process
-			 */
-			loadedAll: function () {
-				Core.generate();
-			},
-
-			/**
-			 * ## - Imports.on.error()
-			 *
-			 * Returns a custom single-script load error handler function which warns about the script file path
-			 * @param {script} [HTMLElement] : The script tag to reference
-			 */
-			error: function (script) {
-				return function () {
-					console.warn('Failed to load: ' + script.src);
-				};
-			}
-		}
-	};
-
-	/**
-	 * A private namespace of internal core variables and library routines
-	 */
-	var Core = {
-		// Whether or not the main() application entry point callback has been fired
-		started: false,
-
-		/**
-		 * ## - Core.main()
-		 *
-		 * A placeholder for the application entry point callback reserved by main()
-		 */
-		main: A.func(),
-
-		/**
-		 * ## - Core.init()
-		 *
-		 * Calls main entry point function
-		 */
-		init: function () {
-			Core.started = true;
-			Core.main();
-		},
-
-		/**
-		 * ## - Core.generate()
-		 *
-		 * Cleans up global exports and starts the class generation process
-		 */
-		generate: function () {
-			A.delete(window, AccessUtilities);
-			Modules.defineModules();
-
-			// TODO: Check for still-undefined modules and throw
-			// errors concerning their tentative definitions.
-
-			Core.init();
-		},
-
-		/**
-		 * ## - Core.exception()
-		 *
-		 * Logs an exception string
-		 * @param {exception} [Exception] : A thrown Exception instance
-		 */
-		exception: function (exception) {
-			console.error(exception.toString());
-		},
-
-		/**
-		 * DOM-related routines
-		 */
-		DOM: {
-			/**
-			 * ## - Core.DOM.create()
-			 *
-			 * Create and return a new DOM element
-			 * @param {type} [String] : The element tag type
-			 */
-			create: function (type) {
-				return document.createElement(type);
-			},
-
-			/**
-			 * ## - Core.DOM.append()
-			 *
-			 * Append a new child element node to the DOM
-			 * @param {node} [HTMLElement] : The child element node to append
-			 */
-			append: function (node) {
-				document.body.appendChild(node);
-			},
-
-			/**
-			 * ## - Core.DOM.remove()
-			 *
-			 * Remove an existing child element node from the DOM
-			 * @param {node} [HTMLElement]: The child element node to remove
-			 */
-			remove: function (node) {
-				document.body.removeChild(node);
-			}
-		}
-	};
 
 	/**
 	 * ### - Library method: include()
