@@ -1,10 +1,17 @@
 (function(){
-	var Application = include('Application').from('Application.js');
+	var OscillatorNode = include('OscillatorNode').from('Application.js');
 
 	main(function(){
-		var application = new Application();
+		var t = new Date().getTime();
 
-		application.setNumber(18, 5);
-		application.reveal();
+		var nodes = [];
+
+		for (var i = 0 ; i < 100000 ; i++) {
+			nodes[i] = new OscillatorNode();
+		}
+
+		window.t = function () { return nodes; };
+
+		console.log(new Date().getTime() - t);
 	});
 })();

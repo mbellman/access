@@ -1,15 +1,24 @@
 (function(){
-	Class('Application')(function(public, private){
-		private.number = 0;
-		public.value = 10;
+	Class('OscillatorNode')(function(public, private){
+		private.volume = 2;
+		private.playTime = 10;
+		public.pitch = 10;
+		public.time = 50;
 
-		public.reveal = function () {
-			console.log(this.number, this.value);
+		public.getVolume = function () {
+			console.log(this.volume);
 		};
 
-		public.setNumber = function(num, val) {
-			this.number = num;
-			this.value = val;
+		public.getPlayTime = function () {
+			console.log(this.playTime);
+		};
+
+		public.setVolume = function (volume) {
+			this.volume = volume;
+		};
+
+		public.getPitch = function () {
+			console.log(this.pitch);
 		};
 	});
 })();

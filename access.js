@@ -118,20 +118,52 @@
 		},
 
 		/**
+		 * ## - A.eachInArray()
+		 *
+		 * Iterates over the elements in an array, invoking a handler for each
+		 * @param {array} [Array<*>] : The array to iterate over
+		 * @param {handler(value, index)} [Function] : A handler function to act with the element data
+		 */
+		eachInArray: function (array, handler) {
+			var length = array.length;
+			var i = length + 1;
+
+			if (length < 1) {
+				return;
+			}
+
+			while (--i) {
+				var index = length - i;
+
+				if (handler(array[index], index) === false) {
+					break;
+				}
+			}
+		},
+
+		/**
+		 * ## - A.eachInObject()
+		 *
+		 * Iterates over the unique properties of an object, invoking a handler for each
+		 * @param {object} [Object] : The object to iterate over
+		 * @param {handler(key, value)} [Function] : A handler function to act with the key/value pair
+		 */
+		eachInObject: function (object, handler) {
+			for (var key in object) {
+				if (object.hasOwnProperty(key)) {
+					if (handler(key, object[key]) === false) {
+						break;
+					}
+				}
+			}
+		},
+
+		/**
 		 * ## - A.each()
 		 *
-		 * Iterates over an enumerable list of items (either an Object or an Array). Non-recursive.
-		 *
-		 * For Objects:
-		 * Iterates over the unique properties of an object, passing both the key and value into a handler function
-		 * @param {list} [Object] : The object to iterate over
-		 * @param {handler(key, value)} [Function] : A handler function to act with the key and value data
-		 *
-		 * For Arrays:
-		 * Iterates over the elements in an array, passing the element value and the index into a handler function
-		 * @param {list} [Array] : The array to iterate over
-		 * @param {handler(value, index)} [Function] : A handler function to act with the value and index
-		 *
+		 * Iterates over a list of items (either an Object or an Array). Only performs shallow iteration on objects.
+		 * @param {list} [Array<*>, Object] : The list to iterate over
+		 * @param {handler} [Function] : A handler function to run for each iteration
 		 * Optional @param {context} [Object] : A context to bind the handler function to
 		 */
 		each: function (list, handler, context) {
@@ -142,15 +174,9 @@
 			}
 
 			if (A.instanceOf(list, Array)) {
-				for (var i = 0 ; i < list.length ; i++) {
-					handler(list[i], i);
-				}
+				A.eachInArray(list, handler);
 			} else if (A.instanceOf(list, Object) && !A.typeOf(list, 'function')) {
-				for (var key in list) {
-					if (list.hasOwnProperty(key)) {
-						handler(key, list[key]);
-					}
-				}
+				A.eachInObject(list, handler);
 			}
 		},
 
@@ -269,10 +295,11 @@
 			]
 		},
 
-		// [Object{Object}] : Event queues
+		// [Object{*}] : Module event management
 		events: {
 			// [Array<String>] : Valid event names
 			valid: ['built', 'defined'],
+
 			// [Object{Array<Function>}] : Event handlers run upon a module's builder() method having fired
 			built: {},
 			// [Object{Array<Function>}] : Event handlers run upon a module's definition
@@ -369,6 +396,54 @@
 		},
 
 		/**
+		 * ## - Modules.canInstantiate()
+		 *
+		 * Determine whether or not a module can be instantiated based on is type
+		 * @param {module} [String] : The module name
+		 */
+		canInstantiate: function (module) {
+			return A.isInArray(Modules.types.instantiable, Modules.typeOf(module));
+		},
+
+		/**
+		 * ## - Modules.bindPublicMembers()
+		 *
+		 * Creates a "public" property of a newly-constructed class instance and binds the public members of the class to the property.
+		 * The property serves as a proxy for the public members already directly bound to the instance. This technique allows public
+		 * members and methods to be accessed via the public property returned by the class constructor, but for the original method
+		 * definitions to act on "this", the context being the whole instance with all of its public, private, or protected members.
+		 * @param {publicMembers} [Object] : An object containing the public class members
+		 * @param {keyList} [Array<String>] : A cached list of the public member object's own enumerable keys to optimize iteration
+		 * @param {instance} [Object] : A newly-constructed class instance
+		 */
+		bindPublicMembers: function (publicMembers, keyList, instance) {
+			instance.public = {};
+
+			A.eachInArray(keyList, function(key){
+				var member = publicMembers[key];
+
+				switch (typeof member) {
+					case 'function':
+						instance.public[key] = A.bind(member, instance);
+						break;
+					case 'object':
+						instance.public[key] = Object.create(member);
+						break;
+					default:
+						Object.defineProperty(instance.public, key, {
+							configurable: true,
+							get: function () {
+								return instance[key];
+							},
+							set: function(literal) {
+								instance[key] = literal;
+							}
+						});
+				}
+			});
+		},
+
+		/**
 		 * ## - Modules.buildModuleTemplate()
 		 *
 		 * Sets up the module constructor and delegates an event handler to update the module members upon running its builder function
@@ -379,70 +454,37 @@
 				return;
 			}
 
-			var members = {
-				public: {},
-				private: {},
-				protected: {}
-			};
+			var ClassMembers = {};
+			var PublicMembers = {};
+			var PublicMembersKeyList = [];
 
 			function Constructor () {
 				try {
-					var type = Modules.typeOf(module);
-
-					if (!A.isInArray(Modules.types.instantiable, type)) {
-						throw new AccessException('Cannot instantiate ' + type + ': {' + module + '}');
+					if (!Modules.canInstantiate(module)) {
+						throw new AccessException('Cannot instantiate ' + Modules.typeOf(module) + ': {' + module + '}');
 					}
-				} catch (exception) {
-					Core.error(exception);
+				} catch (e) {
+					Core.exception(e);
 					return;
 				}
 
-				var context = {
-					public: {}
-				};
+				var instance = Object.create(ClassMembers);
 
-				A.extend(context.public, members.public);
-				A.bindAllMethods(context.public, context);
-				A.extend(context, context.public, members.private, members.protected);
+				Modules.bindPublicMembers(PublicMembers, PublicMembersKeyList, instance);
 
-				// TODO: Make a special function for this
-				A.each(context.public, function(key, value){
-					Object.defineProperty(context, key, {
-						configurable: true,
-						get: function () {
-							return this.val;
-						},
-						set: function(literal) {
-							this.val = literal;
-							context.public[key] = literal;
-						}
-					});
-				});
-
-				return context.public;
+				return instance.public;
 			}
 
 			Modules.events.on('built', module, function(_public, _private, _protected){
-				A.extendEach(
-					[members.public, _public],
-					[members.private, _private],
-					[members.protected, _protected]
-				);
+				A.extend(ClassMembers, _public, _private, _protected);
+				A.extend(PublicMembers, _public);
+
+				A.each(PublicMembers, function(key){
+					PublicMembersKeyList.push(key);
+				});
 			});
 
 			Modules.defined[module] = Constructor;
-		},
-
-		/**
-		 * ## - Modules.buildModule()
-		 *
-		 * Properly defines a module by kicking off its builder function
-		 * @param {module} [String] : The module name
-		 */
-		buildModule: function (module) {
-			if (Modules.queue.hasOwnProperty(module)) {
-				Modules.queue[module].build();
-			}
 		},
 
 		/**
@@ -546,8 +588,8 @@
 				if (this.implements && Modules.definedTypes[this.implements] !== Modules.types.INTERFACE) {
 					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented (Class: {' + this.name + '})');
 				}
-			} catch (exception) {
-				Console.error(exception);
+			} catch (e) {
+				Core.exception(e);
 				return false;
 			}
 
@@ -600,7 +642,7 @@
 
 			A.each(this.extends, function(module){
 				if (!Modules.isReady(module)) {
-					ready = false;
+					return (ready = false);
 				}
 			});
 
@@ -615,7 +657,7 @@
 		this.checkReadyStatus = function () {
 			if (this.allExtensionsDefined()) {
 				if (this.implements === null || Modules.isReady(this.implements)) {
-					Modules.buildModule(this.name);
+					this.build();
 				}
 			}
 		};
@@ -811,13 +853,13 @@
 		},
 
 		/**
-		 * ## - Core.error()
+		 * ## - Core.exception()
 		 *
 		 * Logs an exception string
-		 * @param {error} [Exception] : A thrown Exception instance
+		 * @param {exception} [Exception] : A thrown Exception instance
 		 */
-		exception: function (error) {
-			console.error(error.toString());
+		exception: function (exception) {
+			console.error(exception.toString());
 		},
 
 		/**
