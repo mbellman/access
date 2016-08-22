@@ -660,19 +660,26 @@
 		 * ## - Members.bindSpecialObject()
 		 */
 		bindSpecialObject: function (object, classMembers, staticMembers, constructor) {
-			var target = (object.isPublic ? constructor : staticMembers);
+			var bindTargets = [classMembers];
 
 			if (object.isStatic) {
+				bindTargets.push(staticMembers);
+
 				if (object.isFunction) {
 					object.value = A.bind(object.value, staticMembers);
 				}
 
-				target[object.name] = object.value;
+				staticMembers[object.name] = object.value;
+
+				if (object.isPublic) {
+					// TODO: test - bindTargets.push(constructor);
+					constructor[object.name] = staticMembers[object.name];
+				}
 			}
 
 			classMembers[object.name] = object.value;
 
-			Members.setWritable([classMembers, target], object.name, object.isFinal);
+			Members.setWritable(bindTargets, object.name, !object.isFinal);
 		},
 
 		/**
@@ -697,6 +704,10 @@
 						staticMembers[primitive.name] = value;
 					}
 				});
+
+				if (primitive.isPublic) {
+					A.bindReference(primitive.name, constructor, staticMembers);
+				}
 			}
 
 			if (primitive.isFinal && !primitive.isStatic) {
@@ -705,10 +716,6 @@
 
 			Members.setWritable(bindTargets, primitive.name, !primitive.isFinal);
 			Object.defineProperty(classMembers, primitive.name, descriptor);
-
-			if (primitive.isStatic && primitive.isPublic) {
-				A.bindReference(primitive.name, constructor, staticMembers);
-			}
 		},
 
 		/**
