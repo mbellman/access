@@ -108,6 +108,27 @@
 		},
 
 		/**
+		 * ## - A.bindReference()
+		 *
+		 * Creates a one-way binding from a proxy object property to an original context
+		 * @param {name} [String] : The property name
+		 * @param {proxy} [Object] : The proxy object
+		 * @param {context} [Object] : The original context object to bind the proxy object property to
+		 */
+		bindReference: function (name, proxy, context) {
+			Object.defineProperty(proxy, name, {
+				configurable: true,
+				enumerable: true,
+				get: function () {
+					return context[name];
+				},
+				set: function(value) {
+					context[name] = value;
+				}
+			});
+		},
+
+		/**
 		 * ## - A.argsToArray()
 		 *
 		 * Returns a normal array from an arguments list
@@ -122,7 +143,7 @@
 		 *
 		 * Iterates over the elements in an array, invoking a handler for each
 		 * @param {array} [Array<*>] : The array to iterate over
-		 * @param {handler(value, index)} [Function] : A handler function to act with the element data
+		 * @param {handler(value, index, array)} [Function] : A handler function to act with the element data
 		 */
 		eachInArray: function (array, handler) {
 			var length = array.length;
@@ -135,7 +156,7 @@
 			while (--i) {
 				var index = length - i;
 
-				if (handler(array[index], index) === false) {
+				if (handler(array[index], index, array) === false) {
 					break;
 				}
 			}
@@ -146,12 +167,12 @@
 		 *
 		 * Iterates over the unique properties of an object, invoking a handler for each
 		 * @param {object} [Object] : The object to iterate over
-		 * @param {handler(key, value)} [Function] : A handler function to act with the key/value pair
+		 * @param {handler(key, value, object)} [Function] : A handler function to act with the key/value pair
 		 */
 		eachInObject: function (object, handler) {
 			for (var key in object) {
 				if (object.hasOwnProperty(key)) {
-					if (handler(key, object[key]) === false) {
+					if (handler(key, object[key], object) === false) {
 						break;
 					}
 				}
@@ -161,23 +182,49 @@
 		/**
 		 * ## - A.each()
 		 *
-		 * Iterates over a list of items (either an Object or an Array). Only performs shallow iteration on objects.
-		 * @param {list} [Array<*>, Object] : The list to iterate over
+		 * Iterates over a list of items (either an Object or an Array), invoking a handler for each. Only performs shallow iteration on objects.
+		 * @param {list} [Array<*> OR Object] : The list to iterate over
 		 * @param {handler} [Function] : A handler function to run for each iteration
 		 * Optional @param {context} [Object] : A context to bind the handler function to
 		 */
 		each: function (list, handler, context) {
 			handler = A.func(handler);
 
+			if (A.instanceOf(list, Array)) {
+				A.eachInArray(list, handler, context);
+			} else if (A.instanceOf(list, Object) && !A.typeOf(list, 'function')) {
+				A.eachInObject(list, handler);
+			}
+		},
+
+		/**
+		 * ## - A.deepEach()
+		 *
+		 * Recursively iterates over the properties of an object, invoking a handler only on primitives
+		 * @param {object} [Object] : The object to iterate over
+		 * @param {handler(key, value, stack, object)} [Function] : A handler function to run for each iteration
+		 * Optional @param {stack} [Array<String>] : The current stack of nested properties
+		 * Optional @param {context} [Object] : A context to bind the handler function to
+		 */
+		deepEach: function (object, handler, stack, context) {
+			handler = A.func(handler);
+			stack = stack || [];
+
 			if (context) {
 				handler = A.bind(handler, context);
 			}
 
-			if (A.instanceOf(list, Array)) {
-				A.eachInArray(list, handler);
-			} else if (A.instanceOf(list, Object) && !A.typeOf(list, 'function')) {
-				A.eachInObject(list, handler);
-			}
+			A.eachInObject(object, function(key, value){
+				if (A.typeOf(value, 'object')) {
+					stack.push(key);
+					A.deepEach(object[key], handler, stack, context);
+					stack.pop();
+				}
+
+				if (handler(key, value, stack, object) === false) {
+					return false;
+				}
+			});
 		},
 
 		/**
@@ -213,30 +260,18 @@
 			var target = objects[0];
 
 			A.compare(objects, function(key, value){
-				if (!target.hasOwnProperty(key)) {
-					if (A.typeOf(value, 'object')) {
-						A.extend((target[key] = {}), value);
-					} else {
-						target[key] = value;
+				if (A.typeOf(value, 'object')) {
+					if (!target.hasOwnProperty(key)) {
+						target[key] = {};
 					}
+
+					A.extend(target[key], value);
+				} else {
+					target[key] = value;
 				}
 			});
 
 			return target;
-		},
-
-		/**
-		 * ## - A.extendEach()
-		 *
-		 * Invokes A.extend() on each of a list of object Arrays containing arguments to be passed into the method
-		 * @param {[array1, [array2, [...]]]} [Array<Object>] : An array containing objects for the A.extend() call
-		 */
-		extendEach: function () {
-			var args = A.argsToArray(arguments);
-
-			A.each(args, function(objects){
-				A.extend.apply(null, objects);
-			});
 		},
 
 		/**
@@ -257,6 +292,59 @@
 			});
 
 			return target;
+		},
+
+		/**
+		 * ## - A.deleteKeys()
+		 *
+		 * Removes an arbitrary number of keys from an object
+		 * @param {object} [Object] : The target object
+		 * @param {[key1, [key2, [...]]]} [String] : The key names to delete
+		 */
+		deleteKeys: function () {
+			var args = A.argsToArray(arguments);
+			var object = args[0];
+
+			args.splice(0, 1);
+
+			A.each(args, function(key){
+				delete object[key];
+			});
+		},
+
+		/**
+		 * ## - A.extendOrDeleteEach()
+		 *
+		 * Either extends or deletes properties of the first element in multiple object arrays based on the remaining elements
+		 * @param {action} [String] : The action to perform (either 'extend' or 'delete')
+		 * @param {array} [Array<Array<Object>>] : A multidimensional array containing sub-arrays of objects to pass into A.extend() or A.delete()
+		 */
+		extendOrDeleteEach: function (action, array) {
+			action = A[action];
+
+			A.eachInArray(array, function(objects){
+				action.apply(null, objects);
+			});
+		},
+
+		/**
+		 * ## - A.extendEach()
+		 *
+		 * Calls A.extendOrDeleteEach() with 'extend' on an array of object arrays
+		 * @param {[array1, [array2, [...]]]} [Array<Array<Object>>] : An array containing object arrays for each A.extend() call
+		 */
+		extendEach: function () {
+			A.extendOrDeleteEach('extend', A.argsToArray(arguments));
+		},
+
+		/**
+		 * ## - A.deleteEach()
+		 *
+		 * Calls A.extendOrDeleteEach() with 'delete' on an array of object arrays
+		 * @param {[array1, [array2, [...]]]} [Array<Array<Object>>] : An array containing object arrays for each A.delete() call
+		 */
+		deleteEach: function () {
+			A.extendOrDeleteEach('delete', A.argsToArray(arguments));
 		},
 
 		/**
@@ -470,6 +558,213 @@
 	};
 
 	/**
+	 * Module member definition utilities
+	 */
+	var Members = {
+		/**
+		 * ## - Members.getMemberTree()
+		 *
+		 * Returns a base class member object structure with sub-properties for keyword chains
+		 * @returns {object} [Object] : The class member tree
+		 */
+		getMemberTree: function () {
+			var tree = {
+				final: {
+					static: {}
+				},
+				static: {
+					final: {}
+				}
+			};
+
+			return {
+				public: A.extend({}, tree),
+				private: A.extend({}, tree),
+				protected: A.extend({}, tree)
+			};
+		},
+
+		/**
+		 * ## - Members.setWritable()
+		 *
+		 * Updates a key's "writable" property configuration on a member object or each in an array of member objects
+		 * @param {members} [Object OR Array<Object>] : The object or list of objects with the property to update
+		 * @param {key} [String] : The property name
+		 * @param {isWritable} [Boolean] : The writable configuration state to set the property to
+		 */
+		setWritable: function (members, key, isWritable) {
+			if (A.instanceOf(members, Array)) {
+				A.eachInArray(members, function(_members){
+					Members.setWritable(_members, key, isWritable);
+				});
+			} else {
+				if (!A.typeOf(key, 'undefined')) {
+					Object.defineProperty(members, key, {
+						configurable: true,
+						writable: isWritable
+					});
+				}
+			}
+		},
+
+		/**
+		 * ## - Members.createSpecialMember()
+		 */
+		createSpecialMember: function (name, value, flags) {
+			return {
+				name: name,
+				value: value,
+				isFunction: A.typeOf(value, 'function'),
+				isStatic: flags.static || false,
+				isFinal: flags.final || false,
+				isPublic: flags.public || false
+			};
+		},
+
+		/**
+		 * ## - Members.spliceSpecialMembers()
+		 */
+		spliceSpecialMembers: function (members) {
+			var specialMembers = {};
+
+			var flags = {
+				static: false,
+				final: false,
+				public: false
+			};
+
+			A.deepEach(members, function(name, value, stack){
+				flags.final = false;
+				flags.static = false;
+				flags.public = false;
+
+				A.eachInArray(stack, function(value){
+					if (flags.hasOwnProperty(value)) {
+						flags[value] = true;
+					}
+				});
+
+				if (flags.final || flags.static) {
+					specialMembers[name] = Members.createSpecialMember(name, value, flags);
+				}
+			});
+
+			A.deleteKeys(members.public, 'static', 'final');
+			A.deleteKeys(members.private, 'static', 'final');
+			A.deleteKeys(members.protected, 'static', 'final');
+
+			return specialMembers;
+		},
+
+		/**
+		 * ## - Members.bindSpecialObject()
+		 */
+		bindSpecialObject: function (object, classMembers, staticMembers, constructor) {
+			var target = (object.isPublic ? constructor : staticMembers);
+
+			if (object.isStatic) {
+				if (object.isFunction) {
+					object.value = A.bind(object.value, staticMembers);
+				}
+
+				target[object.name] = object.value;
+			}
+
+			classMembers[object.name] = object.value;
+
+			Members.setWritable([classMembers, target], object.name, object.isFinal);
+		},
+
+		/**
+		 * ## - Members.bindSpecialPrimitive()
+		 */
+		bindSpecialPrimitive: function (primitive, classMembers, staticMembers, constructor) {
+			var bindTargets = [classMembers];
+			var descriptor = {
+				enumerable: true,
+				configurable: true
+			};
+
+			if (primitive.isStatic) {
+				bindTargets.push(staticMembers);
+				staticMembers[primitive.name] = primitive.value;
+
+				A.extend(descriptor, {
+					get: function () {
+						return staticMembers[primitive.name];
+					},
+					set: function (value) {
+						staticMembers[primitive.name] = value;
+					}
+				});
+			}
+
+			if (primitive.isFinal && !primitive.isStatic) {
+				descriptor.value = primitive.value;
+			}
+
+			Members.setWritable(bindTargets, primitive.name, !primitive.isFinal);
+			Object.defineProperty(classMembers, primitive.name, descriptor);
+
+			if (primitive.isStatic && primitive.isPublic) {
+				A.bindReference(primitive.name, constructor, staticMembers);
+			}
+		},
+
+		/**
+		 * ## - Members.bindSpecialMembers()
+		 */
+		bindSpecialMembers: function (specialMembers, classMembers, publicMembers, staticMembers, constructor) {
+			A.each(specialMembers, function(key, member){
+				if (key === 'public') {
+					return;
+				}
+
+				switch (typeof member.value) {
+					case 'function':
+					case 'object':
+						Members.bindSpecialObject(member, classMembers, staticMembers, constructor);
+						break;
+					default:
+						Members.bindSpecialPrimitive(member, classMembers, staticMembers, constructor);
+				}
+
+				if (member.isPublic) {
+					A.bindReference(member.name, publicMembers, classMembers);
+				}
+			});
+		},
+
+		/**
+		 * ## - Members.bindMembers()
+		 *
+		 * Creates cloned properties of an original object on an alias object. All functions have their context bound to the original object
+		 * and primitives have their getters and setters overridden to point to the original object's eqivalent property. In effect, the alias
+		 * object serves as a proxy for the original object. This is used for binding all public class members. 
+		 * @param {members} [Object] : An object containing the original properties
+		 * @param {keys} [Array<String>] : A cached list of the original object's enumerable keys to optimize iteration (this method is run for every class instantiation)
+		 * @param {original} [Object] : The original object
+		 * @param {alias} [Object] : An alias object on which to bind properties pointing to the equivalent origin properties
+		 */
+		bindMembers: function (members, keys, original, alias) {
+			A.eachInArray(keys, function(key){
+				var member = members[key];
+
+				switch (typeof member) {
+					case 'function':
+						alias[key] = A.bind(member, original);
+						break;
+					case 'object':
+						alias[key] = Object.create(member);
+						break;
+					default:
+						A.bindReference(key, alias, original);
+				}
+			});
+		}
+	};
+
+	/**
 	 * Module utilities
 	 */
 	var Modules = {
@@ -598,47 +893,9 @@
 		},
 
 		/**
-		 * ## - Modules.bindPublicMembers()
-		 *
-		 * Creates a "public" property of a newly-constructed class instance and binds the public members of the class to the property.
-		 * The property serves as a proxy for the public members already directly bound to the instance. This technique allows public
-		 * members and methods to be accessed via the public property returned by the class constructor, but for the original method
-		 * definitions to act on "this", the context being the whole instance with all of its public, private, or protected members.
-		 * @param {publicMembers} [Object] : An object containing the public class members
-		 * @param {keyList} [Array<String>] : A cached list of the public member object's own enumerable keys to optimize iteration
-		 * @param {instance} [Object] : A newly-constructed class instance
-		 */
-		bindPublicMembers: function (publicMembers, keyList, instance) {
-			instance.public = {};
-
-			A.eachInArray(keyList, function(key){
-				var member = publicMembers[key];
-
-				switch (typeof member) {
-					case 'function':
-						instance.public[key] = A.bind(member, instance);
-						break;
-					case 'object':
-						instance.public[key] = Object.create(member);
-						break;
-					default:
-						Object.defineProperty(instance.public, key, {
-							configurable: true,
-							get: function () {
-								return instance[key];
-							},
-							set: function(literal) {
-								instance[key] = literal;
-							}
-						});
-				}
-			});
-		},
-
-		/**
 		 * ## - Modules.buildModuleTemplate()
 		 *
-		 * Sets up the module constructor and delegates an event handler to update the module members upon running its builder function
+		 * Sets up a module constructor and delegates an event handler to update the module members upon running its builder function
 		 * @param {module} [String] : The module name
 		 */
 		buildModuleTemplate: function (module) {
@@ -647,6 +904,7 @@
 			}
 
 			var ClassMembers = {};
+			var StaticMembers = {};
 			var PublicMembers = {};
 			var PublicMembersKeyList = [];
 
@@ -661,15 +919,19 @@
 				}
 
 				var instance = Object.create(ClassMembers);
-
-				Modules.bindPublicMembers(PublicMembers, PublicMembersKeyList, instance);
+				Members.bindMembers(PublicMembers, PublicMembersKeyList, instance, (instance.public = {}));
 
 				return instance.public;
 			}
 
-			Modules.events.on('built', module, function(_public, _private, _protected){
-				A.extend(ClassMembers, _public, _private, _protected);
-				A.extend(PublicMembers, _public);
+			Modules.events.on('built', module, function(members){
+				// TODO: Save a clone of the {members} object for extension by other classes
+
+				var specialMembers = Members.spliceSpecialMembers(members);
+
+				Members.bindSpecialMembers(specialMembers, ClassMembers, PublicMembers, StaticMembers, Constructor);
+				A.extend(ClassMembers, members.public, members.private, members.protected);
+				A.extend(PublicMembers, members.public);
 
 				A.each(PublicMembers, function(key){
 					PublicMembersKeyList.push(key);
@@ -685,6 +947,7 @@
 		 * Returns a special function which receives and stores a builder function for a module. In the case of classes,
 		 * this function will have additional properties applied to it which offer chainable class customization methods.
 		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
+		 * @returns {definer} [Function] : The definer method
 		 */
 		getDefiner: function () {
 			return function definer (builder) {
@@ -696,7 +959,7 @@
 		/**
 		 * ## - Modules.defineModules()
 		 *
-		 * Defines all modules
+		 * Defines all queued modules
 		 */
 		defineModules: function () {
 			A.each(Modules.queue, function(module, definition){
@@ -797,19 +1060,7 @@
 		 */
 		this.build = function () {
 			if (this.validate()) {
-				var members = {
-					public: {
-						static: {},
-						final: {}
-					},
-					private: {
-						static: {}
-					},
-					protected: {
-						static: {},
-						final: {}
-					}
-				};
+				var members = Members.getMemberTree();
 
 				delete Modules.queue[this.name];
 				Modules.definedTypes[this.name] = this.type;
@@ -818,7 +1069,7 @@
 
 				this.builder(members.public, members.private, members.protected);
 
-				Modules.events.trigger('built', this.name, [members.public, members.private, members.protected]);
+				Modules.events.trigger('built', this.name, [members]);
 				Modules.events.trigger('defined', this.name, [this.name]);
 			}
 		};
