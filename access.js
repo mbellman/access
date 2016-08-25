@@ -39,6 +39,27 @@
 		},
 
 		/**
+		 * ## - A.isObject()
+		 */
+		isObject: function (value) {
+			return (A.typeOf(value, 'object') && !A.instanceOf(value, Array));
+		},
+
+		/**
+		 * ## - A.isArray()
+		 */
+		isArray: function (value) {
+			return A.instanceOf(value, Array);
+		},
+
+		/**
+		 * ## - A.isFunction()
+		 */
+		isFunction: function (value) {
+			return A.typeOf(value, 'function');
+		},
+
+		/**
 		 * ## - A.func()
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
@@ -46,7 +67,7 @@
 		 * @param {assignee} [*] : The variable to check against
 		 */
 		func: function (assignee) {
-			if (!A.typeOf(assignee, 'function')) {
+			if (!A.isFunction(assignee)) {
 				return function () {};
 			}
 
@@ -190,9 +211,13 @@
 		each: function (list, handler, context) {
 			handler = A.func(handler);
 
-			if (A.instanceOf(list, Array)) {
-				A.eachInArray(list, handler, context);
-			} else if (A.instanceOf(list, Object) && !A.typeOf(list, 'function')) {
+			if (context) {
+				handler = A.bind(handler, context);
+			}
+
+			if (A.isArray(list)) {
+				A.eachInArray(list, handler);
+			} else if (A.isObject(list)) {
 				A.eachInObject(list, handler);
 			}
 		},
@@ -587,13 +612,13 @@
 		/**
 		 * ## - Members.setWritable()
 		 *
-		 * Updates a key's "writable" property configuration on a member object or each in an array of member objects
+		 * Updates or adds a key's "writable" property configuration on a member object or each in an array of member objects
 		 * @param {members} [Object OR Array<Object>] : The object or list of objects with the property to update
 		 * @param {key} [String] : The property name
 		 * @param {isWritable} [Boolean] : The writable configuration state to set the property to
 		 */
 		setWritable: function (members, key, isWritable) {
-			if (A.instanceOf(members, Array)) {
+			if (A.isArray(members)) {
 				A.eachInArray(members, function(_members){
 					Members.setWritable(_members, key, isWritable);
 				});
@@ -608,13 +633,13 @@
 		},
 
 		/**
-		 * ## - Members.createSpecialMember()
+		 * ## - Members.defineSpecialMember()
 		 */
-		createSpecialMember: function (name, value, flags) {
+		defineSpecialMember: function (name, value, flags) {
 			return {
 				name: name,
 				value: value,
-				isFunction: A.typeOf(value, 'function'),
+				isFunction: A.isFunction(value),
 				isStatic: flags.static || false,
 				isFinal: flags.final || false,
 				isPublic: flags.public || false
@@ -645,7 +670,7 @@
 				});
 
 				if (flags.final || flags.static) {
-					specialMembers[name] = Members.createSpecialMember(name, value, flags);
+					specialMembers[name] = Members.defineSpecialMember(name, value, flags);
 				}
 			});
 
@@ -657,13 +682,13 @@
 		},
 
 		/**
-		 * ## - Members.bindSpecialObject()
+		 * ## - Members.attachSpecialObjectMember()
 		 */
-		bindSpecialObject: function (object, classMembers, staticMembers, constructor) {
-			var bindTargets = [classMembers];
+		attachSpecialObjectMember: function (object, classMembers, staticMembers, constructor) {
+			var attachTargets = [classMembers];
 
 			if (object.isStatic) {
-				bindTargets.push(staticMembers);
+				attachTargets.push(staticMembers);
 
 				if (object.isFunction) {
 					object.value = A.bind(object.value, staticMembers);
@@ -672,28 +697,30 @@
 				staticMembers[object.name] = object.value;
 
 				if (object.isPublic) {
-					// TODO: test - bindTargets.push(constructor);
+					// TODO: test - attachTargets.push(constructor);
 					constructor[object.name] = staticMembers[object.name];
 				}
 			}
 
 			classMembers[object.name] = object.value;
 
-			Members.setWritable(bindTargets, object.name, !object.isFinal);
+			Members.setWritable(attachTargets, object.name, !object.isFinal);
 		},
 
 		/**
-		 * ## - Members.bindSpecialPrimitive()
+		 * ## - Members.attachSpecialPrimitiveMember()
 		 */
-		bindSpecialPrimitive: function (primitive, classMembers, staticMembers, constructor) {
-			var bindTargets = [classMembers];
+		attachSpecialPrimitiveMember: function (primitive, classMembers, staticMembers, constructor) {
+			var attachTargets = [classMembers];
+
 			var descriptor = {
 				enumerable: true,
 				configurable: true
 			};
 
 			if (primitive.isStatic) {
-				bindTargets.push(staticMembers);
+				attachTargets.push(staticMembers);
+
 				staticMembers[primitive.name] = primitive.value;
 
 				A.extend(descriptor, {
@@ -714,14 +741,14 @@
 				descriptor.value = primitive.value;
 			}
 
-			Members.setWritable(bindTargets, primitive.name, !primitive.isFinal);
+			Members.setWritable(attachTargets, primitive.name, !primitive.isFinal);
 			Object.defineProperty(classMembers, primitive.name, descriptor);
 		},
 
 		/**
-		 * ## - Members.bindSpecialMembers()
+		 * ## - Members.attachSpecialMembers()
 		 */
-		bindSpecialMembers: function (specialMembers, classMembers, publicMembers, staticMembers, constructor) {
+		attachSpecialMembers: function (specialMembers, classMembers, publicMembers, staticMembers, constructor) {
 			A.each(specialMembers, function(key, member){
 				if (key === 'public') {
 					return;
@@ -730,10 +757,10 @@
 				switch (typeof member.value) {
 					case 'function':
 					case 'object':
-						Members.bindSpecialObject(member, classMembers, staticMembers, constructor);
+						Members.attachSpecialObjectMember(member, classMembers, staticMembers, constructor);
 						break;
 					default:
-						Members.bindSpecialPrimitive(member, classMembers, staticMembers, constructor);
+						Members.attachSpecialPrimitiveMember(member, classMembers, staticMembers, constructor);
 				}
 
 				if (member.isPublic) {
@@ -772,10 +799,30 @@
 	};
 
 	/**
+	 * Superclass generation utilities
+	 */
+	var Superclass = {
+		/**
+		 * ## - Superclass.buildSuperclass()
+		 *
+		 * Sets up a special Superclass constructor representing an aggregate of all of a derived module's extended/implemented modules
+		 * @param {extensions} [Array<String>] : The derived module's extended classes
+		 * @param {implementation} [String] : The derived module's interface
+		 */
+		buildSuperclass: function (extensions, implementation) {
+			console.log(extensions, implementation);
+
+			function Constructor () {
+
+			}
+		}
+	};
+
+	/**
 	 * Module utilities
 	 */
 	var Modules = {
-		// [Object{String}] : Module type variants
+		// [Object{*}] : Module type names
 		types: {
 			CLASS: 'Class',
 			FINAL_CLASS: 'Final Class',
@@ -866,7 +913,7 @@
 		 * @param {module} [String] : The module name
 		 */
 		has: function (module) {
-			return (Modules.defined.hasOwnProperty(module) && A.typeOf(Modules.defined[module], 'function'));
+			return (Modules.defined.hasOwnProperty(module) && A.isFunction(Modules.defined[module]));
 		},
 
 		/**
@@ -883,7 +930,7 @@
 		 * ## - Modules.typeOf()
 		 *
 		 * Return the type of a module by name, or null if no such module is available
-		 * @param {module} [String] : The module name
+		 * @param {module} [String] : The module type name
 		 */
 		typeOf: function (module) {
 			return Modules.definedTypes[module] || null;
@@ -915,6 +962,8 @@
 			var PublicMembers = {};
 			var PublicMembersKeyList = [];
 
+			var superclass;
+
 			function Constructor () {
 				try {
 					if (!Modules.canInstantiate(module)) {
@@ -926,17 +975,22 @@
 				}
 
 				var instance = Object.create(ClassMembers);
+
 				Members.bindMembers(PublicMembers, PublicMembersKeyList, instance, (instance.public = {}));
 
 				return instance.public;
 			}
 
-			Modules.events.on('built', module, function(members){
+			Modules.events.on('built', module, function(definition, members, superclass){
+				if (definition.type === Modules.types.INTERFACE) {
+					return;
+				}
+
 				// TODO: Save a clone of the {members} object for extension by other classes
 
 				var specialMembers = Members.spliceSpecialMembers(members);
 
-				Members.bindSpecialMembers(specialMembers, ClassMembers, PublicMembers, StaticMembers, Constructor);
+				Members.attachSpecialMembers(specialMembers, ClassMembers, PublicMembers, StaticMembers, Constructor);
 				A.extend(ClassMembers, members.public, members.private, members.protected);
 				A.extend(PublicMembers, members.public);
 
@@ -954,13 +1008,14 @@
 		 * Returns a special function which receives and stores a builder function for a module. In the case of classes,
 		 * this function will have additional properties applied to it which offer chainable class customization methods.
 		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
+		 * @param {context} [Object] : The context to bind the definer to
 		 * @returns {definer} [Function] : The definer method
 		 */
-		getDefiner: function () {
-			return function definer (builder) {
+		getDefiner: function (context) {
+			return A.bind(function definer(builder){
 				this.builder = builder;
 				Modules.queue[this.name] = this;
-			};
+			}, context);
 		},
 
 		/**
@@ -970,7 +1025,11 @@
 		 */
 		defineModules: function () {
 			A.each(Modules.queue, function(module, definition){
-				definition.checkReadyStatus();
+				if (definition.type !== Modules.types.INTERFACE) {
+					definition.checkReadyStatus();
+				} else {
+					definition.build();
+				}
 			});
 		}
 	};
@@ -987,20 +1046,35 @@
 
 		// [String] : The interface name
 		this.name = name;
-		// [Function(void)] : A function which defines the interface members
+		// [String] : The interface type; always "Interface"
+		this.type = Modules.types.INTERFACE;
+		// [Function(public)] : A function which defines the interface members
 		this.builder = A.func();
 
+		/**
+		 * ## - InterfaceDefinition.build()
+		 */
 		this.build = function(){
+			var members = {
+				public: {}
+			};
 
+			delete Modules.queue[this.name];
+			Modules.definedTypes[this.name] = Modules.types.INTERFACE;
+
+			this.builder(members);
+
+			Modules.events.trigger('built', this.name, [this, members]);
+			Modules.events.trigger('defined', this.name, [this.name]);
 		};
 
 		/**
 		 * ## - definer()
 		 *
 		 * An internal method which receives a builder function to define the members of the interface; exposed by the InterfaceDefinition constructor
-		 * @param {builder(void)} [Function] : The interface builder function
+		 * @param {builder(public)} [Function] : The interface builder function
 		 */
-		var definer = A.bind(Modules.getDefiner(), this);
+		var definer = Modules.getDefiner(this);
 
 		A.bindAll(this, 'build');
 
@@ -1043,12 +1117,12 @@
 
 				A.each(this.extends, function(value){
 					if (Modules.definedTypes[value] === Modules.types.INTERFACE) {
-						throw new AccessException('Interface {' + value + '} cannot be extended (Class: {' + this.name + '})');
+						throw new AccessException('Interface {' + value + '} cannot be extended by Class: {' + this.name + '}');
 					}
 				}, this);
 
 				if (this.implements && Modules.definedTypes[this.implements] !== Modules.types.INTERFACE) {
-					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented (Class: {' + this.name + '})');
+					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented by Class: {' + this.name + '}');
 				}
 			} catch (e) {
 				Core.exception(e);
@@ -1063,11 +1137,12 @@
 		 *
 		 * Sets up the class members via this.builder(), passes the modified member objects into the module's "built" event
 		 * handler for attachment to the MemberGroup prototypes, and finally triggers the module's "defined" event to
-		 * potentially kick off builds of modules which extend this one. Manually called via Modules.build().
+		 * potentially kick off builds of modules which extend this one.
 		 */
 		this.build = function () {
 			if (this.validate()) {
 				var members = Members.getMemberTree();
+				var superclass = Superclass.buildSuperclass(this.extends, this.implements);
 
 				delete Modules.queue[this.name];
 				Modules.definedTypes[this.name] = this.type;
@@ -1076,7 +1151,7 @@
 
 				this.builder(members.public, members.private, members.protected);
 
-				Modules.events.trigger('built', this.name, [members]);
+				Modules.events.trigger('built', this.name, [this, members, superclass]);
 				Modules.events.trigger('defined', this.name, [this.name]);
 			}
 		};
@@ -1118,7 +1193,7 @@
 		 * An internal method which receives a builder function to define the members of the class; exposed by the ClassDefinition constructor
 		 * @param {builder(public, private, protected)} [Function] : The class builder function
 		 */
-		var definer = A.bind(Modules.getDefiner(), this);
+		var definer = Modules.getDefiner(this);
 
 		/**
 		 * ## - definer.extends()

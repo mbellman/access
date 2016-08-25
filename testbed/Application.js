@@ -1,18 +1,33 @@
 (function(){
-	Class('ClassTest')(function(public, private){
-		private.attribute = 10;
-		private.static.message = "Hello";
-
-		public.report = function () {
-			console.log(this.message);
+	Class('ClassTest').extends('BaseClass').implements('BaseInterface')(function(public, private){
+		public.static.object = {
+			here: "is some data",
+			this: "is some more data",
+			and: {
+				this: "is even more data!"
+			}
 		};
 
-		public.setMessage = function(message) {
-			this.message = message;
+		public.superMethod = function () {
+			this.super.method();
 		};
 
-		public.static.reportMessage = function() {
-			console.log(this.message);
+		public.method = function () {
+			console.log('Hello');
+		};
+	});
+
+	Class('BaseClass')(function(public){
+		public.value = 'A string.';
+
+		public.method = function () {
+			console.log('A method.');
+		};
+	});
+
+	Interface('BaseInterface')(function(public){
+		public.action = function () {
+			console.log('An interface method.');
 		};
 	});
 })();

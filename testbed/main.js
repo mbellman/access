@@ -3,8 +3,5 @@
 
 	main(function(){
 		var classTest = new ClassTest();
-		classTest.setMessage("Goodbye");
-		
-		ClassTest.reportMessage();
 	});
 })();
