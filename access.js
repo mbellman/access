@@ -60,6 +60,13 @@
 		},
 
 		/**
+		 * ## - A.isUndefined()
+		 */
+		isUndefined: function (value) {
+			return A.typeOf(value, 'undefined');
+		},
+
+		/**
 		 * ## - A.func()
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
@@ -98,7 +105,6 @@
 		 */
 		bindAll: function () {
 			var args = A.argsToArray(arguments);
-
 			var context = args[0];
 
 			while (args.length > 1) {
@@ -394,8 +400,10 @@
 	 * Internal core variables and library routines
 	 */
 	var Core = {
-		// Whether or not the main() application entry point callback has been fired
+		// [Boolean] : Whether or not the main() application entry point callback has been fired
 		started: false,
+		// [Boolean] : Whether debug mode is on
+		debug: false,
 
 		/**
 		 * ## - Core.main()
@@ -587,12 +595,12 @@
 	 */
 	var Members = {
 		/**
-		 * ## - Members.getMemberTree()
+		 * ## - Members.createMemberTree()
 		 *
 		 * Returns a base class member object structure with sub-properties for keyword chains
-		 * @returns {object} [Object] : The class member tree
+		 * @returns [Object]
 		 */
-		getMemberTree: function () {
+		createMemberTree: function () {
 			var tree = {
 				final: {
 					static: {}
@@ -607,6 +615,45 @@
 				private: A.extend({}, tree),
 				protected: A.extend({}, tree)
 			};
+		},
+
+		/**
+		 * ## - Members.createMemberTable()
+		 *
+		 * TODO
+		 * @returns [Object]
+		 */
+		createMemberTable: function () {
+			return {
+				ClassMembers: {},
+				PublicMembers: {},
+				PublicMemberKeyList: [],
+				ProtectedMembers: {},
+				StaticMembers: {}
+			};
+		},
+
+		/**
+		 * ## - Members.buildMemberTable()
+		 *
+		 * TODO
+		 * @returns {table} [Object] : An object containing the categorized members
+		 */
+		buildMemberTable: function (members, constructor) {
+			var specialMembers = Members.spliceSpecialMembers(members);
+			var table = createMemberTable();
+
+			// TODO: Revise - Members.attachSpecialMembers(specialMembers, table, constructor)
+			Members.attachSpecialMembers(specialMembers, ClassMembers, PublicMembers, StaticMembers, Constructor);
+			
+			A.extend(ClassMembers, members.public, members.private, members.protected);
+			A.extend(PublicMembers, members.public);
+
+			A.each(PublicMembers, function(key){
+				PublicMemberKeyList.push(key);
+			});
+
+			return table;
 		},
 
 		/**
@@ -651,12 +698,7 @@
 		 */
 		spliceSpecialMembers: function (members) {
 			var specialMembers = {};
-
-			var flags = {
-				static: false,
-				final: false,
-				public: false
-			};
+			var flags = {};
 
 			A.deepEach(members, function(name, value, stack){
 				flags.final = false;
@@ -735,9 +777,7 @@
 				if (primitive.isPublic) {
 					A.bindReference(primitive.name, constructor, staticMembers);
 				}
-			}
-
-			if (primitive.isFinal && !primitive.isStatic) {
+			} else if (primitive.isFinal) {
 				descriptor.value = primitive.value;
 			}
 
@@ -801,20 +841,30 @@
 	/**
 	 * Superclass generation utilities
 	 */
-	var Superclass = {
-		/**
-		 * ## - Superclass.buildSuperclass()
-		 *
-		 * Sets up a special Superclass constructor representing an aggregate of all of a derived module's extended/implemented modules
-		 * @param {extensions} [Array<String>] : The derived module's extended classes
-		 * @param {implementation} [String] : The derived module's interface
-		 */
-		buildSuperclass: function (extensions, implementation) {
-			console.log(extensions, implementation);
+	var Supers = {
+		defined: {},
 
+		save: function () {
+
+		},
+
+		/**
+		 * ## - Supers.buildSuperConstructor()
+		 *
+		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes
+		 * @param {name} [String] : The class name
+		 * @param {members} [Object] : The class member tree
+		 */
+		buildSuperConstructor: function (name, members) {
 			function Constructor () {
 
 			}
+
+			Supers.defined[name] = Constructor;
+		},
+
+		construct: function (superclass) {
+
 		}
 	};
 
@@ -931,6 +981,7 @@
 		 *
 		 * Return the type of a module by name, or null if no such module is available
 		 * @param {module} [String] : The module type name
+		 * @returns [String]
 		 */
 		typeOf: function (module) {
 			return Modules.definedTypes[module] || null;
@@ -941,9 +992,52 @@
 		 *
 		 * Determine whether or not a module can be instantiated based on is type
 		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
 		 */
 		canInstantiate: function (module) {
 			return A.isInArray(Modules.types.instantiable, Modules.typeOf(module));
+		},
+
+		/**
+		 * ## - Modules.canConstruct()
+		 *
+		 * Identical in meaning to Modules.canInstantiate(), but throws an error when false
+		 * @param {module} [String] : The module name
+		 * @throws [AccessException]
+		 * @returns [Boolean]
+		 */
+		canConstruct: function (module) {
+			try {
+				if (!Modules.canInstantiate(module)) {
+					throw new AccessException('Cannot instantiate ' + Modules.typeOf(module) + ' {' + module + '}');
+				}
+			} catch (e) {
+				Core.exception(e);
+				return false;
+			}
+
+			return true;
+		},
+
+		/**
+		 * ## - Modules.augmentInstance()
+		 */
+		augmentInstance: function (instance, extensions) {
+			if (extensions.length > 0) {
+				// TODO: Set public superclass members on instance.public,
+				// static members on instance.super, bind references,
+				// set non-writable final members, etc.
+
+				if (extensions.length === 1) {
+					instance.super = Supers.construct(extensions[0]);
+				} else {
+					instance.super = {};
+
+					A.eachInArray(extensions, function(name){
+						instance.super[name] = Supers.construct(name);
+					});
+				}
+			}
 		},
 
 		/**
@@ -957,46 +1051,30 @@
 				return;
 			}
 
-			var ClassMembers = {};
-			var StaticMembers = {};
-			var PublicMembers = {};
-			var PublicMembersKeyList = [];
-
-			var superclass;
+			var MemberTable;
+			var extensions = [];
 
 			function Constructor () {
-				try {
-					if (!Modules.canInstantiate(module)) {
-						throw new AccessException('Cannot instantiate ' + Modules.typeOf(module) + ': {' + module + '}');
-					}
-				} catch (e) {
-					Core.exception(e);
-					return;
+				if (A.isUndefined(MemberTable) || !Modules.canConstruct(module)) {
+					return null;
 				}
 
-				var instance = Object.create(ClassMembers);
+				var instance = Object.create(MemberTable.ClassMembers);
 
-				Members.bindMembers(PublicMembers, PublicMembersKeyList, instance, (instance.public = {}));
+				Members.bindMembers(MemberTable.PublicMembers, MemberTable.PublicMemberKeyList, instance, (instance.public = {}));
+				Modules.augmentInstance(instance, extensions);
 
 				return instance.public;
 			}
 
-			Modules.events.on('built', module, function(definition, members, superclass){
+			Modules.events.on('built', module, function(definition, members){
 				if (definition.type === Modules.types.INTERFACE) {
+					// TODO: Determine an alternate method of saving Interface "supers" for implementation
 					return;
 				}
 
-				// TODO: Save a clone of the {members} object for extension by other classes
-
-				var specialMembers = Members.spliceSpecialMembers(members);
-
-				Members.attachSpecialMembers(specialMembers, ClassMembers, PublicMembers, StaticMembers, Constructor);
-				A.extend(ClassMembers, members.public, members.private, members.protected);
-				A.extend(PublicMembers, members.public);
-
-				A.each(PublicMembers, function(key){
-					PublicMembersKeyList.push(key);
-				});
+				MemberTable = Members.buildMemberTable(MemberTable, members, Constructor);
+				Supers.buildSuperConstructor(module, MemberTable);
 			});
 
 			Modules.defined[module] = Constructor;
@@ -1009,7 +1087,7 @@
 		 * this function will have additional properties applied to it which offer chainable class customization methods.
 		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
 		 * @param {context} [Object] : The context to bind the definer to
-		 * @returns {definer} [Function] : The definer method
+		 * @returns [Function]
 		 */
 		getDefiner: function (context) {
 			return A.bind(function definer(builder){
@@ -1106,8 +1184,8 @@
 		 * ## - ClassDefinition.validate()
 		 *
 		 * Prevents name collisions and ensures that extending classes/interfaces are specified appropriately
-		 * @returns [Boolean] : Class definition validity
 		 * @throws [AccessException]
+		 * @returns [Boolean] : Class definition validity
 		 */
 		this.validate = function () {
 			try {
@@ -1141,8 +1219,7 @@
 		 */
 		this.build = function () {
 			if (this.validate()) {
-				var members = Members.getMemberTree();
-				var superclass = Superclass.buildSuperclass(this.extends, this.implements);
+				var members = Members.createMemberTree();
 
 				delete Modules.queue[this.name];
 				Modules.definedTypes[this.name] = this.type;
@@ -1151,7 +1228,7 @@
 
 				this.builder(members.public, members.private, members.protected);
 
-				Modules.events.trigger('built', this.name, [this, members, superclass]);
+				Modules.events.trigger('built', this.name, [this, members]);
 				Modules.events.trigger('defined', this.name, [this.name]);
 			}
 		};
@@ -1160,7 +1237,7 @@
 		 * ## - ClassDefinition.allExtensionsDefined()
 		 *
 		 * Determine whether all extending classes have been defined
-		 * @returns {ready} [Boolean] : State representing the readiness of all extending classes
+		 * @returns {ready} [Boolean]
 		 */
 		this.allExtensionsDefined = function () {
 			var ready = true;
