@@ -71,11 +71,17 @@
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
 		 * an anonymous function to override it if not. Otherwise, returns the assignee.
+		 * Allows an optional context binding for the returned function.
 		 * @param {assignee} [*] : The variable to check against
+		 * Optional @param {context} [Object] : An object to bind the function to
 		 */
-		func: function (assignee) {
+		func: function (assignee, context) {
 			if (!A.isFunction(assignee)) {
-				return function () {};
+				assignee = function () {};
+			}
+
+			if (context) {
+				assignee = A.bind(assignee, context);
 			}
 
 			return assignee;
@@ -156,6 +162,29 @@
 		},
 
 		/**
+		 * ## - A.setWritable()
+		 *
+		 * Updates or adds a property's "writable" descriptor on an object or a list of objects
+		 * @param {members} [Object OR Array<Object>] : The object or list of objects containing the property to update
+		 * @param {key} [String] : The property name
+		 * @param {isWritable} [Boolean] : The writable configuration state to set the property to
+		 */
+		setWritable: function (members, key, isWritable) {
+			if (A.isArray(members)) {
+				A.eachInArray(members, function(object){
+					A.setWritable(object, key, isWritable);
+				});
+			} else {
+				if (!A.typeOf(key, 'undefined')) {
+					Object.defineProperty(members, key, {
+						configurable: true,
+						writable: isWritable
+					});
+				}
+			}
+		},
+
+		/**
 		 * ## - A.argsToArray()
 		 *
 		 * Returns a normal array from an arguments list
@@ -215,11 +244,7 @@
 		 * Optional @param {context} [Object] : A context to bind the handler function to
 		 */
 		each: function (list, handler, context) {
-			handler = A.func(handler);
-
-			if (context) {
-				handler = A.bind(handler, context);
-			}
+			handler = A.func(handler, context);
 
 			if (A.isArray(list)) {
 				A.eachInArray(list, handler);
@@ -231,25 +256,26 @@
 		/**
 		 * ## - A.deepEach()
 		 *
-		 * Recursively iterates over the properties of an object, invoking a handler only on primitives
+		 * Recursively iterates over the properties of an object
 		 * @param {object} [Object] : The object to iterate over
 		 * @param {handler(key, value, stack, object)} [Function] : A handler function to run for each iteration
 		 * Optional @param {stack} [Array<String>] : The current stack of nested properties
 		 * Optional @param {context} [Object] : A context to bind the handler function to
+		 * Optional @param {allowed} [Array<String>] : Allowed traversable sub-objects by key name
 		 */
-		deepEach: function (object, handler, stack, context) {
-			handler = A.func(handler);
+		deepEach: function (object, handler, stack, context, allowed) {
+			handler = A.func(handler, context);
 			stack = stack || [];
-
-			if (context) {
-				handler = A.bind(handler, context);
-			}
+			allowed = allowed || [];
 
 			A.eachInObject(object, function(key, value){
 				if (A.typeOf(value, 'object')) {
-					stack.push(key);
-					A.deepEach(object[key], handler, stack, context);
-					stack.pop();
+					if (allowed.length === 0 || A.isInArray(allowed, key)) {
+						stack.push(key);
+						A.deepEach(object[key], handler, stack, context);
+						stack.pop();
+						return;
+					}
 				}
 
 				if (handler(key, value, stack, object) === false) {
@@ -625,58 +651,12 @@
 		 */
 		createMemberTable: function () {
 			return {
-				ClassMembers: {},
-				PublicMembers: {},
-				PublicMemberKeyList: [],
-				ProtectedMembers: {},
-				StaticMembers: {}
+				class: {},
+				public: {},
+				publicNames: [],
+				protected: {},
+				static: {}
 			};
-		},
-
-		/**
-		 * ## - Members.buildMemberTable()
-		 *
-		 * TODO
-		 * @returns {table} [Object] : An object containing the categorized members
-		 */
-		buildMemberTable: function (members, constructor) {
-			var specialMembers = Members.spliceSpecialMembers(members);
-			var table = createMemberTable();
-
-			// TODO: Revise - Members.attachSpecialMembers(specialMembers, table, constructor)
-			Members.attachSpecialMembers(specialMembers, ClassMembers, PublicMembers, StaticMembers, Constructor);
-			
-			A.extend(ClassMembers, members.public, members.private, members.protected);
-			A.extend(PublicMembers, members.public);
-
-			A.each(PublicMembers, function(key){
-				PublicMemberKeyList.push(key);
-			});
-
-			return table;
-		},
-
-		/**
-		 * ## - Members.setWritable()
-		 *
-		 * Updates or adds a key's "writable" property configuration on a member object or each in an array of member objects
-		 * @param {members} [Object OR Array<Object>] : The object or list of objects with the property to update
-		 * @param {key} [String] : The property name
-		 * @param {isWritable} [Boolean] : The writable configuration state to set the property to
-		 */
-		setWritable: function (members, key, isWritable) {
-			if (A.isArray(members)) {
-				A.eachInArray(members, function(_members){
-					Members.setWritable(_members, key, isWritable);
-				});
-			} else {
-				if (!A.typeOf(key, 'undefined')) {
-					Object.defineProperty(members, key, {
-						configurable: true,
-						writable: isWritable
-					});
-				}
-			}
 		},
 
 		/**
@@ -687,23 +667,47 @@
 				name: name,
 				value: value,
 				isFunction: A.isFunction(value),
-				isStatic: flags.static || false,
 				isFinal: flags.final || false,
-				isPublic: flags.public || false
+				isStatic: flags.static || false,
+				isPublic: flags.public || false,
+				isProtected: flags.protected || false
 			};
 		},
 
 		/**
+		 * ## - Members.getWritableTargets()
+		 */
+		getWritableTargets: function (member, memberTable, constructor) {
+			var targets = [];
+
+			if (member.isPublic) {
+				targets.push(memberTable.public);
+			}
+
+			if (member.isStatic) {
+				targets.push(memberTable.static)
+				targets.push(constructor);
+			}
+
+			return targets;
+		},
+
+		/**
 		 * ## - Members.spliceSpecialMembers()
+		 *
+		 * Retrieves and deletes final and static members from a newly-defined module "members" object
+		 * @param {members} [Object] : The object defined by a ClassDefinition builder function
+		 * @returns {specialMembers} [Array<Object>] : A list of final and static member definitions
 		 */
 		spliceSpecialMembers: function (members) {
-			var specialMembers = {};
+			var specialMembers = [];
 			var flags = {};
 
 			A.deepEach(members, function(name, value, stack){
 				flags.final = false;
 				flags.static = false;
 				flags.public = false;
+				flags.protected = false;
 
 				A.eachInArray(stack, function(value){
 					if (flags.hasOwnProperty(value)) {
@@ -712,9 +716,9 @@
 				});
 
 				if (flags.final || flags.static) {
-					specialMembers[name] = Members.defineSpecialMember(name, value, flags);
+					specialMembers.push(Members.defineSpecialMember(name, value, flags));
 				}
-			});
+			}, null, null, ['public', 'protected', 'private', 'static', 'final']);
 
 			A.deleteKeys(members.public, 'static', 'final');
 			A.deleteKeys(members.private, 'static', 'final');
@@ -726,34 +730,35 @@
 		/**
 		 * ## - Members.attachSpecialObjectMember()
 		 */
-		attachSpecialObjectMember: function (object, classMembers, staticMembers, constructor) {
-			var attachTargets = [classMembers];
+		attachSpecialObjectMember: function (object, memberTable, constructor) {
+			var writableTargets = Members.getWritableTargets(object, memberTable, constructor);
 
 			if (object.isStatic) {
-				attachTargets.push(staticMembers);
-
 				if (object.isFunction) {
-					object.value = A.bind(object.value, staticMembers);
+					object.value = A.bind(object.value, memberTable.static);
 				}
 
-				staticMembers[object.name] = object.value;
+				memberTable.static[object.name] = object.value;
 
 				if (object.isPublic) {
-					// TODO: test - attachTargets.push(constructor);
-					constructor[object.name] = staticMembers[object.name];
+					memberTable.public[object.name] = constructor[object.name] = memberTable.static[object.name];
 				}
 			}
 
-			classMembers[object.name] = object.value;
+			memberTable.class[object.name] = object.value;
 
-			Members.setWritable(attachTargets, object.name, !object.isFinal);
+			A.setWritable(writableTargets, object.name, !object.isFinal);
 		},
 
 		/**
 		 * ## - Members.attachSpecialPrimitiveMember()
+		 *
+		 * @param {primitive} [Object] : The special member definition for the primitive
+		 * @param {memberTable} [Object] : The module's categorized members
+		 * @param {constructor} [Function] : The module constructor function
 		 */
-		attachSpecialPrimitiveMember: function (primitive, classMembers, staticMembers, constructor) {
-			var attachTargets = [classMembers];
+		attachSpecialPrimitiveMember: function (primitive, memberTable, constructor) {
+			var writableTargets = Members.getWritableTargets(primitive, memberTable, constructor);
 
 			var descriptor = {
 				enumerable: true,
@@ -761,52 +766,73 @@
 			};
 
 			if (primitive.isStatic) {
-				attachTargets.push(staticMembers);
-
-				staticMembers[primitive.name] = primitive.value;
+				memberTable.static[primitive.name] = primitive.value;
 
 				A.extend(descriptor, {
 					get: function () {
-						return staticMembers[primitive.name];
+						return memberTable.static[primitive.name];
 					},
 					set: function (value) {
-						staticMembers[primitive.name] = value;
+						memberTable.static[primitive.name] = value;
 					}
 				});
-
-				if (primitive.isPublic) {
-					A.bindReference(primitive.name, constructor, staticMembers);
-				}
 			} else if (primitive.isFinal) {
 				descriptor.value = primitive.value;
 			}
 
-			Members.setWritable(attachTargets, primitive.name, !primitive.isFinal);
-			Object.defineProperty(classMembers, primitive.name, descriptor);
+			if (primitive.isPublic) {
+				A.bindReference(primitive.name, memberTable.public, memberTable.class);
+
+				if (primitive.isStatic) {
+					A.bindReference(primitive.name, constructor, memberTable.static);
+				}
+			}
+
+			A.setWritable(writableTargets, primitive.name, !primitive.isFinal);
+			Object.defineProperty(memberTable.class, primitive.name, descriptor);
 		},
 
 		/**
 		 * ## - Members.attachSpecialMembers()
+		 *
+		 * TODO
+		 * @param {specialMembers} [Object]
+		 * @param {memberTable} [Object]
+		 * @param {constructor} [Function]
 		 */
-		attachSpecialMembers: function (specialMembers, classMembers, publicMembers, staticMembers, constructor) {
-			A.each(specialMembers, function(key, member){
-				if (key === 'public') {
-					return;
-				}
-
+		attachSpecialMembers: function (specialMembers, memberTable, constructor) {
+			A.eachInArray(specialMembers, function(member){
 				switch (typeof member.value) {
 					case 'function':
 					case 'object':
-						Members.attachSpecialObjectMember(member, classMembers, staticMembers, constructor);
+						Members.attachSpecialObjectMember(member, memberTable, constructor);
 						break;
 					default:
-						Members.attachSpecialPrimitiveMember(member, classMembers, staticMembers, constructor);
-				}
-
-				if (member.isPublic) {
-					A.bindReference(member.name, publicMembers, classMembers);
+						Members.attachSpecialPrimitiveMember(member, memberTable, constructor);
 				}
 			});
+		},
+
+		/**
+		 * ## - Members.buildMemberTable()
+		 *
+		 * Constructs a member table with a module's originally defined members appropriately categorized (see: Members.createMemberTable())
+		 * @returns {memberTable} [Object] : An object containing the categorized members
+		 */
+		buildMemberTable: function (members, constructor) {
+			var memberTable = Members.createMemberTable();
+			var specialMembers = Members.spliceSpecialMembers(members);
+
+			Members.attachSpecialMembers(specialMembers, memberTable, constructor);
+
+			A.extend(memberTable.class, members.public, members.private, members.protected);
+			A.extend(memberTable.public, members.public);
+
+			A.each(memberTable.public, function(key){
+				memberTable.publicKeys.push(key);
+			});
+
+			return memberTable;
 		},
 
 		/**
@@ -816,11 +842,11 @@
 		 * and primitives have their getters and setters overridden to point to the original object's eqivalent property. In effect, the alias
 		 * object serves as a proxy for the original object. This is used for binding all public class members. 
 		 * @param {members} [Object] : An object containing the original properties
-		 * @param {keys} [Array<String>] : A cached list of the original object's enumerable keys to optimize iteration (this method is run for every class instantiation)
-		 * @param {original} [Object] : The original object
+		 * @param {keys} [Array<String>] : A cached list of the original object's enumerable keys to optimize iteration during class instantiation
 		 * @param {alias} [Object] : An alias object on which to bind properties pointing to the equivalent origin properties
+		 * @param {original} [Object] : The original object
 		 */
-		bindMembers: function (members, keys, original, alias) {
+		bindMembers: function (members, keys, alias, original) {
 			A.eachInArray(keys, function(key){
 				var member = members[key];
 
@@ -1020,21 +1046,25 @@
 		},
 
 		/**
-		 * ## - Modules.augmentInstance()
+		 * ## - Modules.bindSupers()
+		 *
+		 * TODO
+		 * @param {instance} [Object] : The class instance object
+		 * @param {supers} [Array<String>] : A list of superclasses by name
 		 */
-		augmentInstance: function (instance, extensions) {
-			if (extensions.length > 0) {
+		bindSupers: function (instance, supers) {
+			if (supers.length > 0) {
 				// TODO: Set public superclass members on instance.public,
 				// static members on instance.super, bind references,
 				// set non-writable final members, etc.
 
-				if (extensions.length === 1) {
-					instance.super = Supers.construct(extensions[0]);
+				if (supers.length === 1) {
+					instance.S = instance.super = Supers.construct(supers[0]);
 				} else {
-					instance.super = {};
+					instance.S = instance.super = {};
 
-					A.eachInArray(extensions, function(name){
-						instance.super[name] = Supers.construct(name);
+					A.eachInArray(supers, function(name){
+						instance.S[name] = instance.super[name] = Supers.construct(name);
 					});
 				}
 			}
@@ -1052,29 +1082,35 @@
 			}
 
 			var MemberTable;
-			var extensions = [];
+			var supers = [];
 
 			function Constructor () {
 				if (A.isUndefined(MemberTable) || !Modules.canConstruct(module)) {
 					return null;
 				}
 
-				var instance = Object.create(MemberTable.ClassMembers);
+				var instance = Object.create(MemberTable.class);
 
-				Members.bindMembers(MemberTable.PublicMembers, MemberTable.PublicMemberKeyList, instance, (instance.public = {}));
-				Modules.augmentInstance(instance, extensions);
+				Members.bindMembers(MemberTable.public, MemberTable.publicNames, (instance.public = {}), instance);
+				// TODO: For Supers, Members.bindMembers(MemberTable.protected, MemberTable.protectedNames, instance.public, instance)
+
+				if (supers.length > 0) {
+					Modules.bindSupers(instance, supers);
+				}
 
 				return instance.public;
 			}
 
-			Modules.events.on('built', module, function(definition, members){
+			Modules.events.on('built', module, function(definition, members, extensions){
 				if (definition.type === Modules.types.INTERFACE) {
 					// TODO: Determine an alternate method of saving Interface "supers" for implementation
 					return;
 				}
 
-				MemberTable = Members.buildMemberTable(MemberTable, members, Constructor);
-				Supers.buildSuperConstructor(module, MemberTable);
+				MemberTable = Members.buildMemberTable(members, Constructor);
+				Supers.buildSuperConstructor(definition.name, MemberTable);
+
+				supers = extensions;
 			});
 
 			Modules.defined[module] = Constructor;
