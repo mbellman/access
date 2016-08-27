@@ -3,5 +3,7 @@
 
 	main(function(){
 		var classTest = new ClassTest();
+
+		classTest.method();
 	});
 })();

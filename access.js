@@ -272,7 +272,7 @@
 				if (A.typeOf(value, 'object')) {
 					if (allowed.length === 0 || A.isInArray(allowed, key)) {
 						stack.push(key);
-						A.deepEach(object[key], handler, stack, context);
+						A.deepEach(object[key], handler, stack, context, allowed);
 						stack.pop();
 						return;
 					}
@@ -455,7 +455,7 @@
 		 */
 		generate: function () {
 			A.delete(window, AccessUtilities);
-			Modules.defineModules();
+			Core.defineModules();
 
 			// TODO: Check for still-undefined modules and throw
 			// errors concerning their tentative definitions.
@@ -471,6 +471,21 @@
 		 */
 		exception: function (exception) {
 			console.error(exception.toString());
+		},
+
+		/**
+		 * ## - Core.defineModules()
+		 *
+		 * Defines all queued modules
+		 */
+		defineModules: function () {
+			A.each(Modules.queue, function(module, definition){
+				if (definition.type !== Modules.types.INTERFACE) {
+					definition.checkReadyStatus();
+				} else {
+					definition.build();
+				}
+			});
 		},
 
 		/**
@@ -646,7 +661,7 @@
 		/**
 		 * ## - Members.createMemberTable()
 		 *
-		 * TODO
+		 * Returns a base member category object structure
 		 * @returns [Object]
 		 */
 		createMemberTable: function () {
@@ -661,6 +676,9 @@
 
 		/**
 		 * ## - Members.defineSpecialMember()
+		 *
+		 * Returns a descriptive definition of static and final module members
+		 * @returns [Object]
 		 */
 		defineSpecialMember: function (name, value, flags) {
 			return {
@@ -676,17 +694,23 @@
 
 		/**
 		 * ## - Members.getWritableTargets()
+		 *
+		 * Determines which member categories a special member belongs to so its "writable" configuration can be defined on each.
+		 * 
+		 * @param {member} [Object] : The special member
+		 * @param {memberTable} [Object] : The module's categorized members
+		 * @param {constructor} [Function] : The module constructor
+		 * @returns {targets} [Array<Object>] : References to the member category objects
 		 */
 		getWritableTargets: function (member, memberTable, constructor) {
-			var targets = [];
+			var targets = [memberTable.class];
 
 			if (member.isPublic) {
 				targets.push(memberTable.public);
 			}
 
 			if (member.isStatic) {
-				targets.push(memberTable.static)
-				targets.push(constructor);
+				targets.push(memberTable.static);
 			}
 
 			return targets;
@@ -696,7 +720,7 @@
 		 * ## - Members.spliceSpecialMembers()
 		 *
 		 * Retrieves and deletes final and static members from a newly-defined module "members" object
-		 * @param {members} [Object] : The object defined by a ClassDefinition builder function
+		 * @param {members} [Object] : The module's base "members" object defined in its builder function
 		 * @returns {specialMembers} [Array<Object>] : A list of final and static member definitions
 		 */
 		spliceSpecialMembers: function (members) {
@@ -729,6 +753,11 @@
 
 		/**
 		 * ## - Members.attachSpecialObjectMember()
+		 *
+		 * Attaches/binds final and static object members to their appropriate categories in a class member table
+		 * @param {primitive} [Object] : The special member definition for the primitive
+		 * @param {memberTable} [Object] : The module's categorized members
+		 * @param {constructor} [Function] : The module constructor
 		 */
 		attachSpecialObjectMember: function (object, memberTable, constructor) {
 			var writableTargets = Members.getWritableTargets(object, memberTable, constructor);
@@ -753,9 +782,10 @@
 		/**
 		 * ## - Members.attachSpecialPrimitiveMember()
 		 *
+		 * Attaches/binds final and static primitive members to their appropriate categories in a class member table
 		 * @param {primitive} [Object] : The special member definition for the primitive
 		 * @param {memberTable} [Object] : The module's categorized members
-		 * @param {constructor} [Function] : The module constructor function
+		 * @param {constructor} [Function] : The module constructor
 		 */
 		attachSpecialPrimitiveMember: function (primitive, memberTable, constructor) {
 			var writableTargets = Members.getWritableTargets(primitive, memberTable, constructor);
@@ -776,7 +806,7 @@
 						memberTable.static[primitive.name] = value;
 					}
 				});
-			} else if (primitive.isFinal) {
+			} else {
 				descriptor.value = primitive.value;
 			}
 
@@ -795,10 +825,10 @@
 		/**
 		 * ## - Members.attachSpecialMembers()
 		 *
-		 * TODO
-		 * @param {specialMembers} [Object]
-		 * @param {memberTable} [Object]
-		 * @param {constructor} [Function]
+		 * Attaches and binds static and final class members to their appropriate categories in a class member table
+		 * @param {specialMembers} [Array<Object>] : A list of special member definitions (see: Members.defineSpecialMember())
+		 * @param {memberTable} [Object] : The module's categorized members
+		 * @param {constructor} [Function] : The module constructor
 		 */
 		attachSpecialMembers: function (specialMembers, memberTable, constructor) {
 			A.eachInArray(specialMembers, function(member){
@@ -817,9 +847,12 @@
 		 * ## - Members.buildMemberTable()
 		 *
 		 * Constructs a member table with a module's originally defined members appropriately categorized (see: Members.createMemberTable())
+		 * @param {members} [Object] : The module's base "members" object defined in its builder function
+		 * @param {constructor} [Function] : The module constructor
+		 * @param {isDerived} [Boolean] : Whether or not the module will be extended
 		 * @returns {memberTable} [Object] : An object containing the categorized members
 		 */
-		buildMemberTable: function (members, constructor) {
+		buildMemberTable: function (members, constructor, isDerived) {
 			var memberTable = Members.createMemberTable();
 			var specialMembers = Members.spliceSpecialMembers(members);
 
@@ -829,7 +862,7 @@
 			A.extend(memberTable.public, members.public);
 
 			A.each(memberTable.public, function(key){
-				memberTable.publicKeys.push(key);
+				memberTable.publicNames.push(key);
 			});
 
 			return memberTable;
@@ -861,36 +894,6 @@
 						A.bindReference(key, alias, original);
 				}
 			});
-		}
-	};
-
-	/**
-	 * Superclass generation utilities
-	 */
-	var Supers = {
-		defined: {},
-
-		save: function () {
-
-		},
-
-		/**
-		 * ## - Supers.buildSuperConstructor()
-		 *
-		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes
-		 * @param {name} [String] : The class name
-		 * @param {members} [Object] : The class member tree
-		 */
-		buildSuperConstructor: function (name, members) {
-			function Constructor () {
-
-			}
-
-			Supers.defined[name] = Constructor;
-		},
-
-		construct: function (superclass) {
-
 		}
 	};
 
@@ -969,6 +972,8 @@
 		queue: {},
 		// [Object{Function}] : List of module constructors by name
 		defined: {},
+		// [Object{String}] : List of modules extended/implemented by derived classes
+		derived: {},
 		// [Object{String}] : List of module types by name
 		definedTypes: {},
 
@@ -1049,10 +1054,10 @@
 		 * ## - Modules.bindSupers()
 		 *
 		 * TODO
-		 * @param {instance} [Object] : The class instance object
 		 * @param {supers} [Array<String>] : A list of superclasses by name
+		 * @param {instance} [Object] : The class instance object
 		 */
-		bindSupers: function (instance, supers) {
+		bindSupers: function (supers, instance) {
 			if (supers.length > 0) {
 				// TODO: Set public superclass members on instance.public,
 				// static members on instance.super, bind references,
@@ -1092,10 +1097,9 @@
 				var instance = Object.create(MemberTable.class);
 
 				Members.bindMembers(MemberTable.public, MemberTable.publicNames, (instance.public = {}), instance);
-				// TODO: For Supers, Members.bindMembers(MemberTable.protected, MemberTable.protectedNames, instance.public, instance)
 
 				if (supers.length > 0) {
-					Modules.bindSupers(instance, supers);
+					Modules.bindSupers(supers, instance);
 				}
 
 				return instance.public;
@@ -1107,10 +1111,14 @@
 					return;
 				}
 
-				MemberTable = Members.buildMemberTable(members, Constructor);
-				Supers.buildSuperConstructor(definition.name, MemberTable);
+				var isDerived = Modules.derived[definition.name];
+				MemberTable = Members.buildMemberTable(members, Constructor, isDerived);
 
-				supers = extensions;
+				if (isDerived) {
+					Supers.buildSuperConstructor(definition.name, MemberTable);
+				}
+
+				supers = supers.concat(extensions);
 			});
 
 			Modules.defined[module] = Constructor;
@@ -1130,21 +1138,38 @@
 				this.builder = builder;
 				Modules.queue[this.name] = this;
 			}, context);
-		},
+		}
+	};
+
+	/**
+	 * Superclass utilities
+	 */
+	var Supers = {
+		constructors: {},
 
 		/**
-		 * ## - Modules.defineModules()
+		 * ## - Supers.buildSuperConstructor()
 		 *
-		 * Defines all queued modules
+		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation
+		 * @param {name} [String] : The class name
+		 * @param {members} [Object] : The class member tree
 		 */
-		defineModules: function () {
-			A.each(Modules.queue, function(module, definition){
-				if (definition.type !== Modules.types.INTERFACE) {
-					definition.checkReadyStatus();
-				} else {
-					definition.build();
-				}
-			});
+		buildSuperConstructor: function (name, memberTable) {
+			function Constructor () {
+				var instance = Object.create(memberTable.class);
+				instance.exports = {};
+
+				Members.bindMembers(memberTable.public, memberTable.publicNames, instance.exports, instance);
+				//Members.bindMembers(memberTable.protected, memberTable.protectedNames, instance.exports, instance);
+
+				return instance.exports;
+			}
+
+			Supers.constructors[name] = Constructor;
+		},
+
+		construct: function (superclass) {
+			return new Supers.constructors[superclass];
 		}
 	};
 
@@ -1264,7 +1289,7 @@
 
 				this.builder(members.public, members.private, members.protected);
 
-				Modules.events.trigger('built', this.name, [this, members]);
+				Modules.events.trigger('built', this.name, [this, members, this.extends]);
 				Modules.events.trigger('defined', this.name, [this.name]);
 			}
 		};
@@ -1320,6 +1345,7 @@
 
 			A.each(classes, function(name){
 				this.extends.push(name);
+				Modules.derived[name] = true;
 				Modules.events.on('defined', name, this.checkReadyStatus);
 			}, this);
 

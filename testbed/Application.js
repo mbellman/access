@@ -1,33 +1,17 @@
 (function(){
-	Class('ClassTest').extends('BaseClass').implements('BaseInterface')(function(public, private){
-		public.static.object = {
-			here: "is some data",
-			this: "is some more data",
-			and: {
-				this: "is even more data!"
-			}
-		};
-
-		public.superMethod = function () {
-			this.super.method();
-		};
+	Class('ClassTest').extends('BaseClass')(function(public, private){
+		private.final.hey = "Hello!";
 
 		public.method = function () {
-			console.log('Hello');
+			console.log(this.hey);
+		};
+
+		public.setHey = function (v) {
+			this.hey = v;
 		};
 	});
 
 	Class('BaseClass')(function(public){
-		public.value = 'A string.';
-
-		public.method = function () {
-			console.log('A method.');
-		};
-	});
-
-	Interface('BaseInterface')(function(public){
-		public.action = function () {
-			console.log('An interface method.');
-		};
+		public.bye = "See ya!";
 	});
 })();
