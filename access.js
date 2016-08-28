@@ -787,7 +787,6 @@
 		 */
 		attachSpecialObjectMember: function (object, memberTable, constructor) {
 			var writableTargets = Members.getWritableTargets(object, memberTable, constructor);
-			memberTable.class[object.name] = object.value;
 
 			if (object.isStatic) {
 				if (object.isFunction) {
@@ -804,6 +803,8 @@
 			if (Core.supermode && object.isProtected) {
 				memberTable.protected[object.name] = object.value;
 			}
+
+			memberTable.class[object.name] = object.value;
 
 			A.setWritable(writableTargets, object.name, !object.isFinal);
 		},
