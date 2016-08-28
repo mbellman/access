@@ -405,6 +405,19 @@
 		},
 
 		/**
+		 * ## - A.saveKeys()
+		 *
+		 * Copies each key name from an object into an array
+		 * @param {object} [Object] : The object to copy from
+		 * @param {array} [Array<String>] : The array to copy to
+		 */
+		saveKeys: function (object, array) {
+			A.eachInObject(object, function(key){
+				array.push(key);
+			});
+		},
+
+		/**
 		 * ## - A.isInArray()
 		 *
 		 * Determine whether a value is contained within a one-dimensional array
@@ -430,6 +443,8 @@
 		started: false,
 		// [Boolean] : Whether debug mode is on
 		debug: false,
+		// [Boolean] : Whether or not to generate modules with protected fields catalogued for exposure via superclass "public" instances
+		supermode: false,
 
 		/**
 		 * ## - Core.main()
@@ -662,16 +677,23 @@
 		 * ## - Members.createMemberTable()
 		 *
 		 * Returns a base member category object structure
-		 * @returns [Object]
+		 * @returns {table} [Object]
 		 */
 		createMemberTable: function () {
-			return {
+			var table = {
 				class: {},
 				public: {},
 				publicNames: [],
 				protected: {},
 				static: {}
 			};
+
+			if (Core.supermode) {
+				table.protected = {};
+				table.protectedNames = [];
+			}
+
+			return table;
 		},
 
 		/**
@@ -707,6 +729,10 @@
 
 			if (member.isPublic) {
 				targets.push(memberTable.public);
+			}
+
+			if (Core.supermode && member.isProtected) {
+				targets.push(memberTable.protected);
 			}
 
 			if (member.isStatic) {
@@ -761,6 +787,7 @@
 		 */
 		attachSpecialObjectMember: function (object, memberTable, constructor) {
 			var writableTargets = Members.getWritableTargets(object, memberTable, constructor);
+			memberTable.class[object.name] = object.value;
 
 			if (object.isStatic) {
 				if (object.isFunction) {
@@ -774,7 +801,9 @@
 				}
 			}
 
-			memberTable.class[object.name] = object.value;
+			if (Core.supermode && object.isProtected) {
+				memberTable.protected[object.name] = object.value;
+			}
 
 			A.setWritable(writableTargets, object.name, !object.isFinal);
 		},
@@ -818,6 +847,10 @@
 				}
 			}
 
+			if (Core.supermode && primitive.isProtected) {
+				A.bindReference(primitive.name, memberTable.protected, memberTable.class);
+			}
+
 			A.setWritable(writableTargets, primitive.name, !primitive.isFinal);
 			Object.defineProperty(memberTable.class, primitive.name, descriptor);
 		},
@@ -849,27 +882,27 @@
 		 * Constructs a member table with a module's originally defined members appropriately categorized (see: Members.createMemberTable())
 		 * @param {members} [Object] : The module's base "members" object defined in its builder function
 		 * @param {constructor} [Function] : The module constructor
-		 * @param {isDerived} [Boolean] : Whether or not the module will be extended
 		 * @returns {memberTable} [Object] : An object containing the categorized members
 		 */
-		buildMemberTable: function (members, constructor, isDerived) {
+		buildMemberTable: function (members, constructor) {
 			var memberTable = Members.createMemberTable();
 			var specialMembers = Members.spliceSpecialMembers(members);
 
 			Members.attachSpecialMembers(specialMembers, memberTable, constructor);
-
 			A.extend(memberTable.class, members.public, members.private, members.protected);
 			A.extend(memberTable.public, members.public);
+			A.saveKeys(memberTable.public, memberTable.publicNames);
 
-			A.each(memberTable.public, function(key){
-				memberTable.publicNames.push(key);
-			});
+			if (Core.supermode) {
+				A.extend(memberTable.protected, members.protected);
+				A.saveKeys(memberTable.protected, memberTable.protectedNames);
+			}
 
 			return memberTable;
 		},
 
 		/**
-		 * ## - Members.bindMembers()
+		 * ## - Members.cloneMembers()
 		 *
 		 * Creates cloned properties of an original object on an alias object. All functions have their context bound to the original object
 		 * and primitives have their getters and setters overridden to point to the original object's eqivalent property. In effect, the alias
@@ -879,7 +912,7 @@
 		 * @param {alias} [Object] : An alias object on which to bind properties pointing to the equivalent origin properties
 		 * @param {original} [Object] : The original object
 		 */
-		bindMembers: function (members, keys, alias, original) {
+		cloneMembers: function (members, keys, alias, original) {
 			A.eachInArray(keys, function(key){
 				var member = members[key];
 
@@ -1053,7 +1086,7 @@
 		/**
 		 * ## - Modules.bindSupers()
 		 *
-		 * TODO
+		 * Instantiates and bounds superclasses to a derived class instance
 		 * @param {supers} [Array<String>] : A list of superclasses by name
 		 * @param {instance} [Object] : The class instance object
 		 */
@@ -1096,7 +1129,7 @@
 
 				var instance = Object.create(MemberTable.class);
 
-				Members.bindMembers(MemberTable.public, MemberTable.publicNames, (instance.public = {}), instance);
+				Members.cloneMembers(MemberTable.public, MemberTable.publicNames, (instance.public = {}), instance);
 
 				if (supers.length > 0) {
 					Modules.bindSupers(supers, instance);
@@ -1107,14 +1140,14 @@
 
 			Modules.events.on('built', module, function(definition, members, extensions){
 				if (definition.type === Modules.types.INTERFACE) {
-					// TODO: Determine an alternate method of saving Interface "supers" for implementation
+					// TODO: Save interface members to a special bank for implementation by classes
 					return;
 				}
 
-				var isDerived = Modules.derived[definition.name];
-				MemberTable = Members.buildMemberTable(members, Constructor, isDerived);
+				Core.supermode = !!Modules.derived[definition.name];
+				MemberTable = Members.buildMemberTable(members, Constructor);
 
-				if (isDerived) {
+				if (Core.supermode) {
 					Supers.buildSuperConstructor(definition.name, MemberTable);
 				}
 
@@ -1159,8 +1192,8 @@
 				var instance = Object.create(memberTable.class);
 				instance.exports = {};
 
-				Members.bindMembers(memberTable.public, memberTable.publicNames, instance.exports, instance);
-				//Members.bindMembers(memberTable.protected, memberTable.protectedNames, instance.exports, instance);
+				Members.cloneMembers(memberTable.public, memberTable.publicNames, instance.exports, instance);
+				Members.cloneMembers(memberTable.protected, memberTable.protectedNames, instance.exports, instance);
 
 				return instance.exports;
 			}
