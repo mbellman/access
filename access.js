@@ -67,6 +67,13 @@
 		},
 
 		/**
+		 * ## - A.isWritable()
+		 */
+		isWritable: function (object, key) {
+			return Object.getOwnPropertyDescriptor(object, key).writable;
+		},
+
+		/**
 		 * ## - A.func()
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
@@ -567,7 +574,7 @@
 			}
 
 			if (A.typeOf(module, 'string') && !Modules.has(module)) {
-				Modules.buildModuleTemplate(module);
+				Modules.buildModuleConstructor(module);
 			}
 
 			return Modules.get(module);
@@ -684,7 +691,6 @@
 				class: {},
 				public: {},
 				publicNames: [],
-				protected: {},
 				static: {}
 			};
 
@@ -836,16 +842,16 @@
 						memberTable.static[primitive.name] = value;
 					}
 				});
+
+				if (primitive.isPublic) {
+					A.bindReference(primitive.name, constructor, memberTable.static);
+				}
 			} else {
 				descriptor.value = primitive.value;
 			}
 
 			if (primitive.isPublic) {
 				A.bindReference(primitive.name, memberTable.public, memberTable.class);
-
-				if (primitive.isStatic) {
-					A.bindReference(primitive.name, constructor, memberTable.static);
-				}
 			}
 
 			if (Core.supermode && primitive.isProtected) {
@@ -903,29 +909,32 @@
 		},
 
 		/**
-		 * ## - Members.cloneMembers()
+		 * ## - Members.bind()
 		 *
-		 * Creates cloned properties of an original object on an alias object. All functions have their context bound to the original object
-		 * and primitives have their getters and setters overridden to point to the original object's eqivalent property. In effect, the alias
-		 * object serves as a proxy for the original object. This is used for binding all public class members. 
-		 * @param {members} [Object] : An object containing the original properties
-		 * @param {keys} [Array<String>] : A cached list of the original object's enumerable keys to optimize iteration during class instantiation
-		 * @param {alias} [Object] : An alias object on which to bind properties pointing to the equivalent origin properties
-		 * @param {original} [Object] : The original object
+		 * Clones and binds members from a class instance object onto a public-facing object which will be returned upon class instantiation.
+		 * All functions have their context bound to the class instance and primitives have their getters and setters overridden to point to
+		 * the class instance's eqivalent property. This allows the public-facing object to serve as a "proxy" to the base instance.
+		 * @param {keys} [Array<String>] : A list of key names for the members to be publicly exposed
+		 * @param {proxy} [Object] : A public-facing object on which to bind properties pointing to the equivalent class instance properties
+		 * @param {instance} [Object] : The class instance object
 		 */
-		cloneMembers: function (members, keys, alias, original) {
+		bind: function (keys, proxy, instance) {
 			A.eachInArray(keys, function(key){
-				var member = members[key];
+				if (!A.isUndefined(proxy[key]) && A.isWritable(Object.getPrototypeOf(instance), key)) {
+					return;
+				}
+
+				var member = instance[key];
 
 				switch (typeof member) {
 					case 'function':
-						alias[key] = A.bind(member, original);
+						proxy[key] = A.bind(member, instance);
 						break;
 					case 'object':
-						alias[key] = Object.create(member);
+						proxy[key] = member;
 						break;
 					default:
-						A.bindReference(key, alias, original);
+						A.bindReference(key, proxy, instance);
 				}
 			});
 		}
@@ -1093,29 +1102,25 @@
 		 */
 		bindSupers: function (supers, instance) {
 			if (supers.length > 0) {
-				// TODO: Set public superclass members on instance.public,
-				// static members on instance.super, bind references,
-				// set non-writable final members, etc.
-
 				if (supers.length === 1) {
-					instance.S = instance.super = Supers.construct(supers[0]);
+					instance.S = instance.super = Supers.construct(supers[0], instance);
 				} else {
 					instance.S = instance.super = {};
 
 					A.eachInArray(supers, function(name){
-						instance.S[name] = instance.super[name] = Supers.construct(name);
+						instance.S[name] = instance.super[name] = Supers.construct(name, instance);
 					});
 				}
 			}
 		},
 
 		/**
-		 * ## - Modules.buildModuleTemplate()
+		 * ## - Modules.buildModuleConstructor()
 		 *
 		 * Sets up a module constructor and delegates an event handler to update the module members upon running its builder function
 		 * @param {module} [String] : The module name
 		 */
-		buildModuleTemplate: function (module) {
+		buildModuleConstructor: function (module) {
 			if (Modules.has(module)) {
 				return;
 			}
@@ -1130,13 +1135,13 @@
 
 				var instance = Object.create(MemberTable.class);
 
-				Members.cloneMembers(MemberTable.public, MemberTable.publicNames, (instance.public = {}), instance);
+				Members.bind(MemberTable.publicNames, (instance.proxy = {}), instance);
 
 				if (supers.length > 0) {
 					Modules.bindSupers(supers, instance);
 				}
 
-				return instance.public;
+				return instance.proxy;
 			}
 
 			Modules.events.on('built', module, function(definition, members, extensions){
@@ -1150,6 +1155,7 @@
 
 				if (Core.supermode) {
 					Supers.buildSuperConstructor(definition.name, MemberTable);
+					// TODO: Bind public static superclass methods to the constructor
 				}
 
 				supers = supers.concat(extensions);
@@ -1179,31 +1185,49 @@
 	 * Superclass utilities
 	 */
 	var Supers = {
+		// [Object{Function(derivedInstance)}] : List of superclass constructors by name
 		constructors: {},
 
 		/**
 		 * ## - Supers.buildSuperConstructor()
 		 *
-		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation
+		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation.
+		 * Called only for classes which are to be derived after their base member table is generated.
 		 * @param {name} [String] : The class name
 		 * @param {members} [Object] : The class member tree
 		 */
 		buildSuperConstructor: function (name, memberTable) {
-			function Constructor () {
-				var instance = Object.create(memberTable.class);
-				instance.exports = {};
+			var publicNames = memberTable.publicNames;
+			var protectedNames = memberTable.protectedNames;
 
-				Members.cloneMembers(memberTable.public, memberTable.publicNames, instance.exports, instance);
-				Members.cloneMembers(memberTable.protected, memberTable.protectedNames, instance.exports, instance);
+			/**
+			 * @param {derivedInstance} [Object] : The derived class instance
+			 */
+			function SuperConstructor (derivedInstance) {
+				var superInstance = Object.create(memberTable.class);
+				superInstance.proxy = {};
 
-				return instance.exports;
+				Members.bind(publicNames, superInstance.proxy, superInstance);
+				Members.bind(protectedNames, superInstance.proxy, superInstance);
+				Members.bind(publicNames, derivedInstance, superInstance);
+				Members.bind(publicNames, derivedInstance.proxy, superInstance);
+				Members.bind(protectedNames, derivedInstance, superInstance);
+
+				return superInstance.proxy;
 			}
 
-			Supers.constructors[name] = Constructor;
+			Supers.constructors[name] = SuperConstructor;
 		},
 
-		construct: function (superclass) {
-			return new Supers.constructors[superclass];
+		/**
+		 * ## - Supers.construct()
+		 *
+		 * Instantiates a superclass, binding its public and protected members onto the derived class instance
+		 * @param {superclass} [String] : The superclass name
+		 * @param {derivedInstance} [Object] : The derived class instance
+		 */
+		construct: function (superclass, derivedInstance) {
+			return new Supers.constructors[superclass](derivedInstance);
 		}
 	};
 
@@ -1215,7 +1239,7 @@
 	 * @returns {definer} [Function] : (See: definer())
 	 */
 	function InterfaceDefinition (name) {
-		Modules.buildModuleTemplate(name);
+		Modules.buildModuleConstructor(name);
 
 		// [String] : The interface name
 		this.name = name;
@@ -1262,7 +1286,7 @@
 	 * @returns {definer} [Function] : (See: definer())
 	 */
 	function ClassDefinition (name, type) {
-		Modules.buildModuleTemplate(name);
+		Modules.buildModuleConstructor(name);
 
 		// [String] : The class name
 		this.name = name;
