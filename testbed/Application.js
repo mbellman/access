@@ -1,24 +1,24 @@
 (function(){
-	Class('ClassTest').extends('BaseClass')(function(public, private){
+	Class('ClassTest').extends('BaseClass')(function(public, private, protected){
 		public.value = 20;
 
 		public.method = function () {
-			console.log(this.value);
+			console.log('Derived: ' + this.value);
 			this.super.method();
 		};
 
 		public.sayWhat = function () {
-			console.log('Nothing');
-			this.super.sayWhat();
+			console.log(this.value);
+			this.method();
 		};
 	});
 
 	Class('BaseClass')(function(public, private, protected){
 		private.number = 5;
-		protected.final.value = 10;
+		protected.value = 10;
 
 		protected.method = function () {
-			console.log(this.number);
+			console.log('Base: ' + this.number);
 		};
 
 		public.sayWhat = function () {

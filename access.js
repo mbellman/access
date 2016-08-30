@@ -133,21 +133,6 @@
 		},
 
 		/**
-		 * ## - A.bindAllMethods()
-		 *
-		 * Iterates over the properties of an object looking for functions, and binds each to a particular context
-		 * @param {object} [Object] : The object to iterate over
-		 * @param {context} [Object] : The context for the functions
-		 */
-		bindAllMethods: function (object, context) {
-			A.each(object, function(key, value){
-				if (A.typeOf(value, 'function')) {
-					object[key] = A.bind(value, context);
-				}
-			});
-		},
-
-		/**
 		 * ## - A.bindReference()
 		 *
 		 * Creates a one-way binding from a proxy object property to an original context
@@ -450,8 +435,8 @@
 		started: false,
 		// [Boolean] : Whether debug mode is on
 		debug: false,
-		// [Boolean] : Whether or not to generate modules with protected fields catalogued for exposure via superclass "public" instances
-		supermode: false,
+		// [Boolean] : Whether or not to generate modules with protected fields catalogued for exposure via superclass "public" (proxy) instances
+		superMode: false,
 
 		/**
 		 * ## - Core.main()
@@ -694,7 +679,7 @@
 				static: {}
 			};
 
-			if (Core.supermode) {
+			if (Core.superMode) {
 				table.protected = {};
 				table.protectedNames = [];
 			}
@@ -735,10 +720,6 @@
 
 			if (member.isPublic) {
 				targets.push(memberTable.public);
-			}
-
-			if (Core.supermode && member.isProtected) {
-				targets.push(memberTable.protected);
 			}
 
 			if (member.isStatic) {
@@ -806,7 +787,7 @@
 				}
 			}
 
-			if (Core.supermode && object.isProtected) {
+			if (Core.superMode && object.isProtected) {
 				memberTable.protected[object.name] = object.value;
 			}
 
@@ -854,7 +835,7 @@
 				A.bindReference(primitive.name, memberTable.public, memberTable.class);
 			}
 
-			if (Core.supermode && primitive.isProtected) {
+			if (Core.superMode && primitive.isProtected) {
 				A.bindReference(primitive.name, memberTable.protected, memberTable.class);
 			}
 
@@ -900,7 +881,7 @@
 			A.extend(memberTable.public, members.public);
 			A.saveKeys(memberTable.public, memberTable.publicNames);
 
-			if (Core.supermode) {
+			if (Core.superMode) {
 				A.extend(memberTable.protected, members.protected);
 				A.saveKeys(memberTable.protected, memberTable.protectedNames);
 			}
@@ -909,19 +890,46 @@
 		},
 
 		/**
+		 * ## - Members.purge()
+		 *
+		 * Force-deletes a member from an instance and removes its public proxy if one exists. Used in reverting a derived class
+		 * member to the base class value if the base member was qualified as final.
+		 * @param {instance} [Object] : The class instance to remove the member from
+		 * @param {key} [String] : The name of the member to remove
+		 */
+		purge: function (instance, key) {
+			A.setWritable(instance, key, true);
+			delete instance[key];
+
+			if (instance.hasOwnProperty('proxy') && instance.proxy.hasOwnProperty(key)) {
+				delete instance.proxy[key];
+			}
+		},
+
+		/**
 		 * ## - Members.bind()
 		 *
-		 * Clones and binds members from a class instance object onto a public-facing object which will be returned upon class instantiation.
-		 * All functions have their context bound to the class instance and primitives have their getters and setters overridden to point to
-		 * the class instance's eqivalent property. This allows the public-facing object to serve as a "proxy" to the base instance.
-		 * @param {keys} [Array<String>] : A list of key names for the members to be publicly exposed
+		 * Clones and binds the members listed in a "keys" array from a class instance object onto a proxy object. The first use for this
+		 * scheme is the creation and binding of public-facing class members to the internal instance for context preservation. The second use
+		 * is for inheritance of base protected and public class members onto a derived class instance, which occurs after the former case.
+		 * The cause for reverse inheritance is that it is quickest to construct the initial derived instance with Object.create() using
+		 * the derived class member table - after this we bind inherited members using "forceRevert" set to true to catch and revert final
+		 * inherited members. Member deletion is first necessary to remove any illegally bound access-modified derivations of final base members.
+		 * @param {keys} [Array<String>] : A list of key names for the members to be cloned and bound
 		 * @param {proxy} [Object] : A public-facing object on which to bind properties pointing to the equivalent class instance properties
 		 * @param {instance} [Object] : The class instance object
+		 * @param {forceRevert} [Boolean] : Forces overriding of derived class instance members if a base class instance member is final
 		 */
-		bind: function (keys, proxy, instance) {
+		bind: function (keys, proxy, instance, forceRevert) {
+			var instanceProto = Object.getPrototypeOf(instance);
+
 			A.eachInArray(keys, function(key){
-				if (!A.isUndefined(proxy[key]) && A.isWritable(Object.getPrototypeOf(instance), key)) {
-					return;
+				if (!A.isUndefined(proxy[key])) {
+					if (forceRevert && !A.isWritable(instanceProto, key)) {
+						Members.purge(proxy, key);
+					} else {
+						return;
+					}
 				}
 
 				var member = instance[key];
@@ -1150,12 +1158,11 @@
 					return;
 				}
 
-				Core.supermode = !!Modules.derived[definition.name];
+				Core.superMode = (!!Modules.derived[definition.name] && definition.type !== Modules.types.FINAL_CLASS);
 				MemberTable = Members.buildMemberTable(members, Constructor);
 
-				if (Core.supermode) {
+				if (Core.superMode) {
 					Supers.buildSuperConstructor(definition.name, MemberTable);
-					// TODO: Bind public static superclass methods to the constructor
 				}
 
 				supers = supers.concat(extensions);
@@ -1209,9 +1216,10 @@
 
 				Members.bind(publicNames, superInstance.proxy, superInstance);
 				Members.bind(protectedNames, superInstance.proxy, superInstance);
-				Members.bind(publicNames, derivedInstance, superInstance);
-				Members.bind(publicNames, derivedInstance.proxy, superInstance);
-				Members.bind(protectedNames, derivedInstance, superInstance);
+
+				Members.bind(publicNames, derivedInstance, superInstance, true);
+				Members.bind(publicNames, derivedInstance.proxy, superInstance, true);
+				Members.bind(protectedNames, derivedInstance, superInstance, true);
 
 				return superInstance.proxy;
 			}
