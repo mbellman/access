@@ -1,28 +1,24 @@
 (function(){
-	Class('ClassTest').extends('BaseClass')(function(public, private, protected){
-		public.value = 20;
+	Class('Cat').extends('Animal')(function(public, private){
+		private.species = "Cat";
+		public.age = 10;
 
-		public.method = function () {
-			console.log('Derived: ' + this.value);
-			this.super.method();
+		public.talk = function () {
+			console.log("Meow!");
 		};
 
-		public.sayWhat = function () {
-			console.log(this.value);
-			this.method();
+		public.walk = function () {
+			this.super.walk();
 		};
 	});
 
-	Class('BaseClass')(function(public, private, protected){
-		private.number = 5;
-		protected.value = 10;
+	Class('Animal')(function(public, private, protected){
+		private.name = "Animal";
+		private.species = null;
+		public.age = null;
 
-		protected.method = function () {
-			console.log('Base: ' + this.number);
-		};
-
-		public.sayWhat = function () {
-			console.log(this.number);
+		protected.walk = function () {
+			console.log("Hello. I am a cat who is walking.");
 		};
 	});
 })();

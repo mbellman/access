@@ -712,10 +712,9 @@
 		 * 
 		 * @param {member} [Object] : The special member
 		 * @param {memberTable} [Object] : The module's categorized members
-		 * @param {constructor} [Function] : The module constructor
 		 * @returns {targets} [Array<Object>] : References to the member category objects
 		 */
-		getWritableTargets: function (member, memberTable, constructor) {
+		getWritableTargets: function (member, memberTable) {
 			var targets = [memberTable.class];
 
 			if (member.isPublic) {
@@ -732,7 +731,7 @@
 		/**
 		 * ## - Members.spliceSpecialMembers()
 		 *
-		 * Retrieves and deletes final and static members from a newly-defined module "members" object
+		 * Retrieves and deletes final and static members from a newly-built module "members" object
 		 * @param {members} [Object] : The module's base "members" object defined in its builder function
 		 * @returns {specialMembers} [Array<Object>] : A list of final and static member definitions
 		 */
@@ -826,6 +825,7 @@
 
 				if (primitive.isPublic) {
 					A.bindReference(primitive.name, constructor, memberTable.static);
+					writableTargets.splice(1, 1);
 				}
 			} else {
 				descriptor.value = primitive.value;
@@ -1102,13 +1102,13 @@
 		},
 
 		/**
-		 * ## - Modules.bindSupers()
+		 * ## - Modules.inherit()
 		 *
-		 * Instantiates and bounds superclasses to a derived class instance
+		 * Instantiates and binds superclasses to a derived class instance
+		 * @param {instance} [Object] : The derived class instance
 		 * @param {supers} [Array<String>] : A list of superclasses by name
-		 * @param {instance} [Object] : The class instance object
 		 */
-		bindSupers: function (supers, instance) {
+		inherit: function (instance, supers) {
 			if (supers.length > 0) {
 				if (supers.length === 1) {
 					instance.S = instance.super = Supers.construct(supers[0], instance);
@@ -1146,7 +1146,7 @@
 				Members.bind(MemberTable.publicNames, (instance.proxy = {}), instance);
 
 				if (supers.length > 0) {
-					Modules.bindSupers(supers, instance);
+					Modules.inherit(instance, supers);
 				}
 
 				return instance.proxy;
@@ -1158,7 +1158,7 @@
 					return;
 				}
 
-				Core.superMode = (!!Modules.derived[definition.name] && definition.type !== Modules.types.FINAL_CLASS);
+				Core.superMode = (Modules.derived[definition.name] === true && definition.type !== Modules.types.FINAL_CLASS);
 				MemberTable = Members.buildMemberTable(members, Constructor);
 
 				if (Core.superMode) {
@@ -1192,7 +1192,7 @@
 	 * Superclass utilities
 	 */
 	var Supers = {
-		// [Object{Function(derivedInstance)}] : List of superclass constructors by name
+		// [Object{Function(derivedInstance)}] : A list of superclass constructors by name
 		constructors: {},
 
 		/**

@@ -1,10 +1,11 @@
 (function(){
-	var ClassTest = include('ClassTest').from('Application.js');
-	var BaseClass = include('BaseClass').from('Application.js');
+	var Cat = include('Cat').from('Application.js');
+	var Animal = include('Animal').from('Application.js');
 
 	main(function(){
-		var classTest = new ClassTest();
+		var cat = new Cat();
 
-		classTest.sayWhat();
+		cat.talk();
+		cat.walk();
 	});
 })();
