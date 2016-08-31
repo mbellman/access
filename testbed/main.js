@@ -3,20 +3,16 @@
 	var Animal = include('Animal').from('Application.js');
 
 	main(function(){
-		var cat = new Cat();
+		var cat = new Cat("Kitty");
 
-		console.log(Cat.color);
+		cat.step();
+		cat.step();
+		cat.step();
+		cat.step();
 
-		Cat.color = "Green";
+		cat.meow();
 
 		var shiro = new Cat();
-		console.log(shiro.color);
-
-		var bat = new Animal();
-		console.log(bat.color);
-
-		Animal.color = "Black";
-
-		shiro.revealColor();
+		shiro.meow();
 	});
 })();

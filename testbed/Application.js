@@ -1,34 +1,20 @@
 (function(){
 	Class('Cat').extends('Animal')(function(public, private){
-		private.species = "Cat";
-		public.age = 10;
-		public.static.color = "White";
-
-		public.talk = function () {
-			console.log("Meow!");
+		private.new = function (species) {
+			this.species = species;
 		};
 
-		public.walk = function () {
-			this.super.walk();
+		public.step = function () {
+			this.steps++;
 		};
 
-		public.revealColor = function () {
-			console.log(this.color);
-			console.log(this.super.color);
+		public.meow = function () {
+			console.log("I have taken " + this.steps + " steps");
 		};
 	});
 
 	Class('Animal')(function(public, private, protected){
-		private.name = "Animal";
-		private.species = null;
-		public.static.color = "Brown";
-
-		protected.walk = function () {
-			console.log("Hello. I am a cat who is walking.");
-		};
-
-		public.static.eat = function () {
-			console.log("Hello. I am an animal who is eating.");
-		};
+		public.static.species = null;
+		protected.steps = 1;
 	});
 })();

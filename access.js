@@ -17,6 +17,21 @@
 	 */
 	var A = {
 		/**
+		 * ## - A.type()
+		 *
+		 * Returns the data type for a value - with the exception of null, which is normalized to 'null' rather than 'object'
+		 * @param {value} [*] : The value to check
+		 * @returns [String]
+		 */
+		type: function (value) {
+			if (value !== null) {
+				return typeof value;
+			}
+
+			return 'null';
+		},
+
+		/**
 		 * ## - A.instanceOf()
 		 *
 		 * Evaluates whether or not a value is an instance of a particular class.
@@ -37,7 +52,7 @@
 		 * @returns [Boolean]
 		 */
 		typeOf: function (value, type) {
-			return (typeof value === type);
+			return (A.type(value) === type);
 		},
 
 		/**
@@ -883,7 +898,7 @@
 		 */
 		attachSpecialMembers: function (specialMembers, memberTable, constructor) {
 			A.eachInArray(specialMembers, function(member){
-				switch (typeof member.value) {
+				switch (A.type(member.value)) {
 					case 'function':
 					case 'object':
 						Members.attachSpecialObjectMember(member, memberTable, constructor);
@@ -964,7 +979,7 @@
 
 				var member = base[key];
 
-				switch (typeof member) {
+				switch (A.type(member)) {
 					case 'function':
 						proxy[key] = A.bind(member, base);
 						break;
@@ -1205,7 +1220,7 @@
 					Modules.inherit(instance, supers);
 				}
 
-				return instance.proxy;
+				return Modules.initialize(instance, arguments);
 			}
 
 			Modules.events.on('built', module, function(definition, members, superclasses){
@@ -1228,6 +1243,22 @@
 			});
 
 			Modules.defined[module] = Constructor;
+		},
+
+		/**
+		 * ## - Modules.initialize()
+		 *
+		 * Runs and deletes the new() initializer function for a newly-constructed class and returns the public class instance
+		 * @param {instance} [Object] : The internal class instance
+		 * @param {args} [Arguments] : Arguments for the initializer
+		 * @returns {instance.proxy} [Object]
+		 */
+		initialize: function (instance, args) {
+			instance.new = A.func(instance.new);
+			instance.new.apply(instance, args);
+
+			delete instance.new;
+			return instance.proxy;
 		},
 
 		/**
@@ -1308,6 +1339,7 @@
 					}
 				});
 
+				// TODO: See about automatically cloning, rather than proxying, static members
 				Members.bind(publicStaticMembers, constructor, memberTable.static);
 			});
 		},
