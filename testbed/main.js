@@ -5,7 +5,18 @@
 	main(function(){
 		var cat = new Cat();
 
-		cat.talk();
-		cat.walk();
+		console.log(Cat.color);
+
+		Cat.color = "Green";
+
+		var shiro = new Cat();
+		console.log(shiro.color);
+
+		var bat = new Animal();
+		console.log(bat.color);
+
+		Animal.color = "Black";
+
+		shiro.revealColor();
 	});
 })();

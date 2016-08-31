@@ -20,8 +20,9 @@
 		 * ## - A.instanceOf()
 		 *
 		 * Evaluates whether or not a value is an instance of a particular class.
-		 * @param {value} [*] : The value to check against
+		 * @param {value} [*] : The value to check
 		 * @param {instance} [Function] : The class instance to check the value against
+		 * @returns [Boolean]
 		 */
 		instanceOf: function (value, instance) {
 			return (value instanceof instance);
@@ -31,8 +32,9 @@
 		 * ## - A.typeOf()
 		 *
 		 * Evaluates whether or not a value is of a particular type
-		 * @param {value} [*] : The value to check against
+		 * @param {value} [*] : The value to check
 		 * @param {type} [String] : The type to check the value against
+		 * @returns [Boolean]
 		 */
 		typeOf: function (value, type) {
 			return (typeof value === type);
@@ -40,6 +42,10 @@
 
 		/**
 		 * ## - A.isObject()
+		 *
+		 * Determines whether a value is a plain JavaScript object
+		 * @param {value} [*] : The value to check
+		 * @returns [Boolean]
 		 */
 		isObject: function (value) {
 			return (A.typeOf(value, 'object') && !A.instanceOf(value, Array));
@@ -47,6 +53,10 @@
 
 		/**
 		 * ## - A.isArray()
+		 *
+		 * Determines whether a value is an array
+		 * @param {value} [*] : The value to check
+		 * @returns [Boolean]
 		 */
 		isArray: function (value) {
 			return A.instanceOf(value, Array);
@@ -54,6 +64,10 @@
 
 		/**
 		 * ## - A.isFunction()
+		 *
+		 * Determines whether a value is a function
+		 * @param {value} [*] : The value to check
+		 * @returns [Boolean]
 		 */
 		isFunction: function (value) {
 			return A.typeOf(value, 'function');
@@ -61,6 +75,10 @@
 
 		/**
 		 * ## - A.isUndefined()
+		 *
+		 * Determines whether a value is undefined
+		 * @param {value} [*] : The value to check
+		 * @returns [Boolean]
 		 */
 		isUndefined: function (value) {
 			return A.typeOf(value, 'undefined');
@@ -68,9 +86,16 @@
 
 		/**
 		 * ## - A.isWritable()
+		 *
+		 * Determines whether a property definition does not have its "writable" attribute explicitly set to false. Proxy
+		 * primitives (bound to others using getters/setters) erroneously report as non-writable due to the omission of the
+		 * "writable" attribute, warranting an explicit false value check.
+		 * @param {object} [Object] : The object containing the property to check
+		 * @param {key} [String] : The name of the property to check
+		 * @returns [Boolean]
 		 */
 		isWritable: function (object, key) {
-			return Object.getOwnPropertyDescriptor(object, key).writable;
+			return (Object.getOwnPropertyDescriptor(object, key).writable !== false);
 		},
 
 		/**
@@ -81,6 +106,7 @@
 		 * Allows an optional context binding for the returned function.
 		 * @param {assignee} [*] : The variable to check against
 		 * Optional @param {context} [Object] : An object to bind the function to
+		 * @returns [Function]
 		 */
 		func: function (assignee, context) {
 			if (!A.isFunction(assignee)) {
@@ -100,6 +126,7 @@
 		 * Returns a context-bound wrapper function
 		 * @param {fn} [Function] : The function to bind the context to
 		 * @param {context} [Object] : The context for the wrapper function
+		 * @returns {wrapper} [Function]
 		 */
 		bind: function (fn, context) {
 			fn = A.func(fn);
@@ -181,6 +208,7 @@
 		 *
 		 * Returns a normal array from an arguments list
 		 * @param {args} [Arguments] : A list of arguments
+		 * @returns [Array<*>]
 		 */
 		argsToArray: function (args) {
 			return Array.prototype.slice.call(args, 0);
@@ -300,9 +328,10 @@
 		/**
 		 * ## - A.extend()
 		 *
-		 * Extends a target object with properties from an arbitrary number of other objects (deep & recursive)
+		 * Extends a target object with properties from an arbitrary number of other objects (deep & recursive) and returns the result
 		 * @param {object1} [Object] : The target object
 		 * @param {[object2, [object3, [...]]]} [Object] : Objects used to extend target
+		 * @returns {target} [Object]
 		 */
 		extend: function () {
 			var objects = A.argsToArray(arguments);
@@ -326,9 +355,10 @@
 		/**
 		 * ## - A.delete()
 		 *
-		 * Inverse of A.extend(); removes properties from a target object if they are also included in other objects
+		 * Inverse of A.extend(); removes properties from a target object if they are also included in other objects, and returns the target
 		 * @param {object1} [Object] : The target object
 		 * @param {[object2, [object3, [...]]]} [Object] : Objects with properties to be removed from target
+		 * @returns {target} [Object]
 		 */
 		delete: function () {
 			var objects = A.argsToArray(arguments);
@@ -415,6 +445,7 @@
 		 * Determine whether a value is contained within a one-dimensional array
 		 * @param {array} [Array] : The array to search through
 		 * @param {value} [*] : The value to search for
+		 * @returns [Boolean]
 		 */
 		isInArray: function (array, value) {
 			for (var i = 0 ; i < array.length ; i++) {
@@ -435,7 +466,7 @@
 		started: false,
 		// [Boolean] : Whether debug mode is on
 		debug: false,
-		// [Boolean] : Whether or not to generate modules with protected fields catalogued for exposure via superclass "public" (proxy) instances
+		// [Boolean] : When toggled to true, module generation catalogues protected members for attachment to internal superclass "public" instances
 		superMode: false,
 
 		/**
@@ -668,7 +699,7 @@
 		/**
 		 * ## - Members.createMemberTable()
 		 *
-		 * Returns a base member category object structure
+		 * Returns an object containing various categories in which to place and qualify class members.
 		 * @returns {table} [Object]
 		 */
 		createMemberTable: function () {
@@ -709,7 +740,6 @@
 		 * ## - Members.getWritableTargets()
 		 *
 		 * Determines which member categories a special member belongs to so its "writable" configuration can be defined on each.
-		 * 
 		 * @param {member} [Object] : The special member
 		 * @param {memberTable} [Object] : The module's categorized members
 		 * @returns {targets} [Array<Object>] : References to the member category objects
@@ -772,7 +802,7 @@
 		 * @param {constructor} [Function] : The module constructor
 		 */
 		attachSpecialObjectMember: function (object, memberTable, constructor) {
-			var writableTargets = Members.getWritableTargets(object, memberTable, constructor);
+			var writableTargets = Members.getWritableTargets(object, memberTable);
 
 			if (object.isStatic) {
 				if (object.isFunction) {
@@ -804,7 +834,7 @@
 		 * @param {constructor} [Function] : The module constructor
 		 */
 		attachSpecialPrimitiveMember: function (primitive, memberTable, constructor) {
-			var writableTargets = Members.getWritableTargets(primitive, memberTable, constructor);
+			var writableTargets = Members.getWritableTargets(primitive, memberTable);
 
 			var descriptor = {
 				enumerable: true,
@@ -909,40 +939,40 @@
 		/**
 		 * ## - Members.bind()
 		 *
-		 * Clones and binds the members listed in a "keys" array from a class instance object onto a proxy object. The first use for this
+		 * Clones and binds the members listed in a "keys" array from a base instance object onto a proxy object. The first use for this
 		 * scheme is the creation and binding of public-facing class members to the internal instance for context preservation. The second use
-		 * is for inheritance of base protected and public class members onto a derived class instance, which occurs after the former case.
+		 * is for inheritance of base class public and protected members onto a derived class instance, which occurs after the former case.
 		 * The cause for reverse inheritance is that it is quickest to construct the initial derived instance with Object.create() using
 		 * the derived class member table - after this we bind inherited members using "forceRevert" set to true to catch and revert final
 		 * inherited members. Member deletion is first necessary to remove any illegally bound access-modified derivations of final base members.
 		 * @param {keys} [Array<String>] : A list of key names for the members to be cloned and bound
-		 * @param {proxy} [Object] : A public-facing object on which to bind properties pointing to the equivalent class instance properties
-		 * @param {instance} [Object] : The class instance object
+		 * @param {proxy} [Object] : A partial alias object on which to bind properties pointing to the equivalent base instance properties
+		 * @param {base} [Object] : The base instance object
 		 * @param {forceRevert} [Boolean] : Forces overriding of derived class instance members if a base class instance member is final
 		 */
-		bind: function (keys, proxy, instance, forceRevert) {
-			var instanceProto = Object.getPrototypeOf(instance);
+		bind: function (keys, proxy, base, forceRevert) {
+			var baseProto = Object.getPrototypeOf(base);
 
 			A.eachInArray(keys, function(key){
 				if (!A.isUndefined(proxy[key])) {
-					if (forceRevert && !A.isWritable(instanceProto, key)) {
+					if (forceRevert && !A.isWritable(baseProto, key)) {
 						Members.purge(proxy, key);
 					} else {
 						return;
 					}
 				}
 
-				var member = instance[key];
+				var member = base[key];
 
 				switch (typeof member) {
 					case 'function':
-						proxy[key] = A.bind(member, instance);
+						proxy[key] = A.bind(member, base);
 						break;
 					case 'object':
 						proxy[key] = member;
 						break;
 					default:
-						A.bindReference(key, proxy, instance);
+						A.bindReference(key, proxy, base);
 				}
 			});
 		}
@@ -977,7 +1007,7 @@
 			defined: {},
 
 			/**
-			 * Modules.events.on()
+			 * ## - Modules.events.on()
 			 *
 			 * Delegates a new event handler for a specific module event
 			 * @param {event} [String] : The event type
@@ -999,7 +1029,7 @@
 			},
 
 			/**
-			 * Modules.events.trigger()
+			 * ## - Modules.events.trigger()
 			 *
 			 * Fires all event handlers for a specific module event
 			 * @param {event} [String] : The event type
@@ -1023,26 +1053,51 @@
 		queue: {},
 		// [Object{Function}] : List of module constructors by name
 		defined: {},
-		// [Object{String}] : List of modules extended/implemented by derived classes
-		derived: {},
+		// [Object{String}] : List of modules extended by derived classes
+		inherited: {},
 		// [Object{String}] : List of module types by name
 		definedTypes: {},
 
 		/**
 		 * ## - Modules.isReady()
 		 *
-		 * Determine whether or not a module has been defined and removed from the pending queue
+		 * Determines whether a module has been defined and removed from the pending queue
 		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
 		 */
 		isReady: function (module) {
 			return (Modules.has(module) && !Modules.queue.hasOwnProperty(module));
 		},
 
 		/**
+		 * ## - Modules.isInterface()
+		 *
+		 * Determines whether a module is an interface
+		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
+		 */
+		isInterface: function (module) {
+			return (Modules.has(module) && Modules.definedTypes[module] === Modules.types.INTERFACE);
+		},
+
+		/**
+		 * ## - Modules.isInherited()
+		 *
+		 * Determines whether a class is inherited. Derived classes invoking .extends() with a particular class name
+		 * will have registered that class in the Modules.inherited list, and only non-final classes can be inherited.
+		 * @param {definition} [ClassDefinition] : The class definition instance
+		 * @returns [Boolean]
+		 */
+		isInherited: function (definition) {
+			return (Modules.inherited[definition.name] === true && definition.type !== Modules.types.FINAL_CLASS);
+		},
+
+		/**
 		 * ## - Modules.has()
 		 *
-		 * Determine whether or not a module has been declared and saved to Modules.defined
+		 * Determines whether a module has been declared and saved to Modules.defined
 		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
 		 */
 		has: function (module) {
 			return (Modules.defined.hasOwnProperty(module) && A.isFunction(Modules.defined[module]));
@@ -1051,8 +1106,9 @@
 		/**
 		 * ## - Modules.get()
 		 *
-		 * Return a module by name, or null if no such module is available
+		 * Return a module constructor by name, or null if no such module is available
 		 * @param {module} [String] : The module name
+		 * @returns [Function]
 		 */
 		get: function (module) {
 			return Modules.defined[module] || null;
@@ -1152,20 +1208,23 @@
 				return instance.proxy;
 			}
 
-			Modules.events.on('built', module, function(definition, members, extensions){
+			Modules.events.on('built', module, function(definition, members, superclasses){
 				if (definition.type === Modules.types.INTERFACE) {
 					// TODO: Save interface members to a special bank for implementation by classes
 					return;
 				}
 
-				Core.superMode = (Modules.derived[definition.name] === true && definition.type !== Modules.types.FINAL_CLASS);
+				Core.superMode = Modules.isInherited(definition);
 				MemberTable = Members.buildMemberTable(members, Constructor);
+				supers = supers.concat(superclasses);
 
 				if (Core.superMode) {
 					Supers.buildSuperConstructor(definition.name, MemberTable);
 				}
 
-				supers = supers.concat(extensions);
+				if (supers.length > 0) {
+					Supers.inheritPublicStaticMembers(supers, Constructor);
+				}
 			});
 
 			Modules.defined[module] = Constructor;
@@ -1194,12 +1253,14 @@
 	var Supers = {
 		// [Object{Function(derivedInstance)}] : A list of superclass constructors by name
 		constructors: {},
+		// [Object{Object}] : A list of base class member tables
+		memberTables: {},
 
 		/**
 		 * ## - Supers.buildSuperConstructor()
 		 *
 		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation.
-		 * Called only for classes which are to be derived after their base member table is generated.
+		 * Called only for classes which are to be inherited after their base member table is generated.
 		 * @param {name} [String] : The class name
 		 * @param {members} [Object] : The class member tree
 		 */
@@ -1225,6 +1286,30 @@
 			}
 
 			Supers.constructors[name] = SuperConstructor;
+			Supers.memberTables[name] = memberTable;
+		},
+
+		/**
+		 * ## - Supers.inheritPublicStaticMembers()
+		 *
+		 * Binds public static base class members to a derived class constructor
+		 * @param {supers} [Array<String>] : A list of superclasses by name
+		 * @param {constructor} [Function] : The derived class constructor
+		 */
+		inheritPublicStaticMembers: function (supers, constructor) {
+			A.eachInArray(supers, function(superclass){
+				var memberTable = Supers.memberTables[superclass];
+				var publicNames = memberTable.publicNames;
+				var publicStaticMembers = [];
+
+				A.eachInArray(publicNames, function(name){
+					if (memberTable.static.hasOwnProperty(name)) {
+						publicStaticMembers.push(name);
+					}
+				});
+
+				Members.bind(publicStaticMembers, constructor, memberTable.static);
+			});
 		},
 
 		/**
@@ -1320,13 +1405,13 @@
 					throw new AccessException('Class {' + this.name + '} defined more than once');
 				}
 
-				A.each(this.extends, function(value){
-					if (Modules.definedTypes[value] === Modules.types.INTERFACE) {
-						throw new AccessException('Interface {' + value + '} cannot be extended by Class: {' + this.name + '}');
+				A.eachInArray(this.extends, function(module){
+					if (Modules.isInterface(module)) {
+						throw new AccessException('Interface {' + module + '} cannot be extended by Class: {' + this.name + '}');
 					}
 				}, this);
 
-				if (this.implements && Modules.definedTypes[this.implements] !== Modules.types.INTERFACE) {
+				if (!!this.implements && !Modules.isInterface(this.implements)) {
 					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented by Class: {' + this.name + '}');
 				}
 			} catch (e) {
@@ -1340,9 +1425,9 @@
 		/**
 		 * ## - ClassDefinition.build()
 		 *
-		 * Sets up the class members via this.builder(), passes the modified member objects into the module's "built" event
-		 * handler for attachment to the MemberGroup prototypes, and finally triggers the module's "defined" event to
-		 * potentially kick off builds of modules which extend this one.
+		 * After definition validation, kicks off the formal definition of class members via the builder function. Upon
+		 * firing the "built" and "defined" events, the class will be ready for instantiation, and derived classes will
+		 * be notified so that they may evaluate their own readiness for building.
 		 */
 		this.build = function () {
 			if (this.validate()) {
@@ -1350,8 +1435,6 @@
 
 				delete Modules.queue[this.name];
 				Modules.definedTypes[this.name] = this.type;
-
-				// TODO: Attach base class/interface members to the member objects before calling this.builder()
 
 				this.builder(members.public, members.private, members.protected);
 
@@ -1369,7 +1452,7 @@
 		this.allExtensionsDefined = function () {
 			var ready = true;
 
-			A.each(this.extends, function(module){
+			A.eachInArray(this.extends, function(module){
 				if (!Modules.isReady(module)) {
 					return (ready = false);
 				}
@@ -1411,7 +1494,7 @@
 
 			A.each(classes, function(name){
 				this.extends.push(name);
-				Modules.derived[name] = true;
+				Modules.inherited[name] = true;
 				Modules.events.on('defined', name, this.checkReadyStatus);
 			}, this);
 
