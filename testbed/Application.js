@@ -19,7 +19,7 @@
 		};
 	});
 
-	Abstract.Class('Animal').extends('Organism')(function(public, private, protected){
+	Class('Animal').extends('Organism')(function(public, private, protected){
 		protected.kingdom = "Animalia";
 		protected.steps = 1;
 

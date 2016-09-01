@@ -534,6 +534,8 @@
 		debug: false,
 		// [Boolean] : When toggled to true, module generation catalogues protected members for attachment to internal superclass "public" instances
 		inSuperMode: false,
+		// [Array<String>] : A list of raised exceptions
+		exceptions: [],
 
 		/**
 		 * ## - Core.main()
@@ -561,10 +563,12 @@
 			A.delete(window, AccessUtilities);
 			Core.defineModules();
 
-			// TODO: Check for still-undefined modules and throw
-			// errors concerning their tentative definitions.
-
-			Core.init();
+			if (Core.exceptions.length === 0) {
+				Core.init();
+			} else {
+				// TODO: See about smarter error messaging (nonexistent modules, circular dependencies, etc.)
+				console.warn('Access: Failed to initialize application');
+			}
 		},
 
 		/**
@@ -574,7 +578,10 @@
 		 * @param {exception} [Exception] : A thrown Exception instance
 		 */
 		raiseException: function (exception) {
-			console.error(exception.toString());
+			var message = exception.toString();
+
+			Core.exceptions.push(message);
+			console.error(message);
 		},
 
 		/**
@@ -681,12 +688,12 @@
 		},
 
 		/**
-		 * ## - Imports.checkIfDone()
+		 * ## - Imports.checkRemaining()
 		 *
 		 * Verifies that no script imports are still pending, and if so
 		 * calls the Imports.on.loadedAll completion handler
 		 */
-		checkIfDone: function () {
+		checkRemaining: function () {
 			if (Imports.pending === 0) {
 				Imports.on.loadedAll();
 			}
@@ -698,8 +705,9 @@
 			 * ## - Imports.on.loadedOne()
 			 *
 			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
-			 * decrements Imports.pending, and queues the Imports.checkIfDone process if no remaining scripts are pending
+			 * decrements Imports.pending, and queues the Imports.checkRemaining() process if no remaining scripts are pending
 			 * @param {script} [HTMLElement] : The script tag to remove
+			 * @returns [Function]
 			 */
 			loadedOne: function (script) {
 				return function () {
@@ -707,7 +715,7 @@
 
 					if (--Imports.pending <= 0) {
 						window.clearTimeout(Imports.doneTimer);
-						Imports.doneTimer = window.setTimeout(Imports.checkIfDone, 250);
+						Imports.doneTimer = window.setTimeout(Imports.checkRemaining, 250);
 					}
 				};
 			},
@@ -726,6 +734,7 @@
 			 *
 			 * Returns a custom single-script load error handler function which warns about the script file path
 			 * @param {script} [HTMLElement] : The script tag to reference
+			 * @returns [Function]
 			 */
 			error: function (script) {
 				return function () {
@@ -1336,6 +1345,17 @@
 		memberTables: {},
 
 		/**
+		 * ## - Supers.has()
+		 *
+		 * Determines whether a specific superclass constructor has been created
+		 * @param {superclass} [String] : The superclass name
+		 * @returns [Boolean]
+		 */
+		has: function (superclass) {
+			return (Supers.constructors.hasOwnProperty(superclass) && Supers.memberTables.hasOwnProperty(superclass));
+		},
+
+		/**
 		 * ## - Supers.canConstruct()
 		 *
 		 * Determines whether a superclass can be constructed
@@ -1405,6 +1425,10 @@
 		 */
 		inheritPublicStaticMembers: function (supers, constructor) {
 			A.eachInArray(supers, function(superclass){
+				if (!Supers.has(superclass)) {
+					return;
+				}
+
 				var memberTable = Supers.memberTables[superclass];
 				var publicNames = memberTable.publicNames;
 				var publicStaticMembers = [];
@@ -1425,10 +1449,14 @@
 		 * Instantiates a superclass, binding its public and protected members onto the derived class instance
 		 * @param {superclass} [String] : The superclass name
 		 * @param {derivedInstance} [Object] : The derived class instance
-		 * @returns [SuperConstructor]
+		 * @returns [new SuperConstructor OR null]
 		 */
 		construct: function (superclass, derivedInstance) {
-			return new Supers.constructors[superclass](derivedInstance);
+			if (Supers.has(superclass)) {
+				return new Supers.constructors[superclass](derivedInstance);
+			}
+
+			return null;
 		}
 	};
 
@@ -1633,6 +1661,7 @@
 	 * Specifies a module to be included from a particular script; returns a chainable
 	 * method for specifying the script file path which invokes Imports.from()
 	 * @param {module} [String] : The name of the module
+	 * @returns [Object]
 	 */
 	function include (module) {
 		return {
@@ -1659,7 +1688,7 @@
 	 *
 	 * Returns an instance of the internal ClassDefinition utility
 	 * @param {name} [String] : The name of the class
-	 * @returns [ClassDefinition]
+	 * @returns [new ClassDefinition]
 	 */
 	function Class (name) {
 		return new ClassDefinition(name);
@@ -1670,7 +1699,7 @@
 	 *
 	 * Shorthand for creating a ClassDefinition instance of type 'Abstract Class'
 	 * @param {name} [String] : The name of the class
-	 * @returns [ClassDefinition]
+	 * @returns [new ClassDefinition]
 	 */
 	var Abstract = {
 		Class: function (name) {
@@ -1683,7 +1712,7 @@
 	 *
 	 * Shorthand for creating a ClassDefinition instance of type 'Final Class'
 	 * @param {name} [String] : The name of the class
-	 * @returns [ClassDefinition]
+	 * @returns [new ClassDefinition]
 	 */
 	var Final = {
 		Class: function (name) {
@@ -1696,6 +1725,7 @@
 	 *
 	 * Returns an instance of the internal InterfaceDefinition utility
 	 * @param {name} [String] : The name of the interface
+	 * @returns [new InterfaceDefinition]
 	 */
 	function Interface (name) {
 		return new InterfaceDefinition(name);
