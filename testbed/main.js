@@ -15,5 +15,7 @@
 		chyatora.meow();
 
 		shiro.getType();
+
+		Organism.getCount();
 	});
 })();

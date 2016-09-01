@@ -2,13 +2,52 @@
 	'use strict';
 
 	/**
-	 * ## - AccessException()
+	 * ## - InstantiationException()
 	 *
-	 * An internal Error handler utility
+	 * An exception for instantiation of non-instantiable modules
+	 * @param {name} [String] : The name of the module
 	 */
-	function AccessException (error) {
+	function InstantiationException (name) {
 		this.toString = function () {
-			return 'Access.js Exception: ' + error;
+			return 'Cannot instantiate ' + Modules.typeOf(name) + ' {' + name + '}';
+		};
+	}
+
+	/**
+	 * ## - MultiDefinitionException()
+	 *
+	 * An exception for multiple definitions of a module
+	 * @param {name} [String] : The name of the module
+	 */
+	function MultiDefinitionException (name) {
+		this.toString = function () {
+			return 'Class {' + name + '} cannot be defined more than once';
+		};
+	}
+
+	/**
+	 * ## - InterfaceExtendedException()
+	 *
+	 * An exception for attempting to extend, rather than implement, an interface
+	 * @param {interfaceName} [String] : The name of the interface
+	 * @param {className} [String] : The name of the offending class
+	 */
+	function InterfaceExtendedException (interfaceName, className) {
+		this.toString = function () {
+			return 'Interface {' + interfaceName + '} cannot be extended by class {' + className + '}';
+		};
+	}
+
+	/**
+	 * ## - ClassImplementedException()
+	 *
+	 * An exception for attempting to implement, rather than extend, a class
+	 * @param {className} [String] : The name of the improperly implemented class
+	 * @param {implementationName} [String] : The name of the offending class
+	 */
+	function ClassImplementedException (className, implementationName) {
+		this.toString = function () {
+			return Modules.definedTypes[className] + ' {' + className + '} cannot be implemented by class {' + implementationName + '}';
 		};
 	}
 
@@ -17,13 +56,13 @@
 	 */
 	var A = {
 		/**
-		 * ## - A.type()
+		 * ## - A.typeOf()
 		 *
 		 * Returns the data type for a value - with the exception of null, which is normalized to 'null' rather than 'object'
 		 * @param {value} [*] : The value to check
 		 * @returns [String]
 		 */
-		type: function (value) {
+		typeOf: function (value) {
 			if (value !== null) {
 				return typeof value;
 			}
@@ -32,27 +71,27 @@
 		},
 
 		/**
-		 * ## - A.instanceOf()
+		 * ## - A.isInstanceOf()
 		 *
 		 * Evaluates whether or not a value is an instance of a particular class.
 		 * @param {value} [*] : The value to check
 		 * @param {instance} [Function] : The class instance to check the value against
 		 * @returns [Boolean]
 		 */
-		instanceOf: function (value, instance) {
+		isInstanceOf: function (value, instance) {
 			return (value instanceof instance);
 		},
 
 		/**
-		 * ## - A.typeOf()
+		 * ## - A.isTypeOf()
 		 *
 		 * Evaluates whether or not a value is of a particular type
 		 * @param {value} [*] : The value to check
 		 * @param {type} [String] : The type to check the value against
 		 * @returns [Boolean]
 		 */
-		typeOf: function (value, type) {
-			return (A.type(value) === type);
+		isTypeOf: function (value, type) {
+			return (A.typeOf(value) === type);
 		},
 
 		/**
@@ -63,7 +102,7 @@
 		 * @returns [Boolean]
 		 */
 		isObject: function (value) {
-			return (A.typeOf(value, 'object') && !A.instanceOf(value, Array));
+			return (A.isTypeOf(value, 'object') && !A.isInstanceOf(value, Array));
 		},
 
 		/**
@@ -74,7 +113,7 @@
 		 * @returns [Boolean]
 		 */
 		isArray: function (value) {
-			return A.instanceOf(value, Array);
+			return A.isInstanceOf(value, Array);
 		},
 
 		/**
@@ -85,7 +124,7 @@
 		 * @returns [Boolean]
 		 */
 		isFunction: function (value) {
-			return A.typeOf(value, 'function');
+			return A.isTypeOf(value, 'function');
 		},
 
 		/**
@@ -96,7 +135,7 @@
 		 * @returns [Boolean]
 		 */
 		isUndefined: function (value) {
-			return A.typeOf(value, 'undefined');
+			return A.isTypeOf(value, 'undefined');
 		},
 
 		/**
@@ -166,7 +205,7 @@
 				var methodName = args[1];
 				var method = context[methodName];
 
-				if (A.typeOf(method, 'function')) {
+				if (A.isTypeOf(method, 'function')) {
 					context[methodName] = A.bind(method, context);
 				}
 
@@ -209,7 +248,7 @@
 					A.setWritable(object, key, isWritable);
 				});
 			} else {
-				if (!A.typeOf(key, 'undefined')) {
+				if (!A.isTypeOf(key, 'undefined')) {
 					Object.defineProperty(members, key, {
 						configurable: true,
 						writable: isWritable
@@ -304,7 +343,7 @@
 			allowed = allowed || [];
 
 			A.eachInObject(object, function(key, value){
-				if (A.typeOf(value, 'object')) {
+				if (A.isTypeOf(value, 'object')) {
 					if (allowed.length === 0 || A.isInArray(allowed, key)) {
 						stack.push(key);
 						A.deepEach(object[key], handler, stack, context, allowed);
@@ -353,7 +392,7 @@
 			var target = objects[0];
 
 			A.compare(objects, function(key, value){
-				if (A.typeOf(value, 'object')) {
+				if (A.isTypeOf(value, 'object')) {
 					if (!target.hasOwnProperty(key)) {
 						target[key] = {};
 					}
@@ -517,12 +556,12 @@
 		},
 
 		/**
-		 * ## - Core.exception()
+		 * ## - Core.raiseException()
 		 *
 		 * Logs an exception string
 		 * @param {exception} [Exception] : A thrown Exception instance
 		 */
-		exception: function (exception) {
+		raiseException: function (exception) {
 			console.error(exception.toString());
 		},
 
@@ -604,7 +643,7 @@
 				Imports.load(script);
 			}
 
-			if (A.typeOf(module, 'string') && !Modules.has(module)) {
+			if (A.isTypeOf(module, 'string') && !Modules.has(module)) {
 				Modules.buildModuleConstructor(module);
 			}
 
@@ -898,7 +937,7 @@
 		 */
 		attachSpecialMembers: function (specialMembers, memberTable, constructor) {
 			A.eachInArray(specialMembers, function(member){
-				switch (A.type(member.value)) {
+				switch (A.typeOf(member.value)) {
 					case 'function':
 					case 'object':
 						Members.attachSpecialObjectMember(member, memberTable, constructor);
@@ -979,7 +1018,7 @@
 
 				var member = base[key];
 
-				switch (A.type(member)) {
+				switch (A.typeOf(member)) {
 					case 'function':
 						proxy[key] = A.bind(member, base);
 						break;
@@ -1172,16 +1211,16 @@
 		 *
 		 * Identical in meaning to Modules.canInstantiate(), but throws an error when false
 		 * @param {module} [String] : The module name
-		 * @throws [AccessException]
+		 * @throws [InstantiationException]
 		 * @returns [Boolean]
 		 */
 		canConstruct: function (module) {
 			try {
 				if (!Modules.canInstantiate(module)) {
-					throw new AccessException('Cannot instantiate ' + Modules.typeOf(module) + ' {' + module + '}');
+					throw new InstantiationException(module);
 				}
 			} catch (e) {
-				Core.exception(e);
+				Core.raiseException(e);
 				return false;
 			}
 
@@ -1428,26 +1467,26 @@
 		 * ## - ClassDefinition.validate()
 		 *
 		 * Prevents name collisions and ensures that extending classes/interfaces are specified appropriately
-		 * @throws [AccessException]
+		 * @throws [MultiDefinitionException OR InterfaceExtendedException OR ClassImplementedException]
 		 * @returns [Boolean] : Class definition validity
 		 */
 		this.validate = function () {
 			try {
 				if (Modules.definedTypes.hasOwnProperty(this.name)) {
-					throw new AccessException('Class {' + this.name + '} defined more than once');
+					throw new MultiDefinitionException(this.name);
 				}
 
 				A.eachInArray(this.extends, function(module){
 					if (Modules.isInterface(module)) {
-						throw new AccessException('Interface {' + module + '} cannot be extended by Class: {' + this.name + '}');
+						throw new InterfaceExtendedException(module, this.name);
 					}
 				}, this);
 
 				if (!!this.implements && !Modules.isInterface(this.implements)) {
-					throw new AccessException(Modules.definedTypes[this.implements] + ' {' + this.implements + '} cannot be implemented by Class: {' + this.name + '}');
+					throw new ClassImplementedException(this.implements, this.name);
 				}
 			} catch (e) {
-				Core.exception(e);
+				Core.raiseException(e);
 				return false;
 			}
 
