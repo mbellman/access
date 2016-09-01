@@ -482,7 +482,7 @@
 		// [Boolean] : Whether debug mode is on
 		debug: false,
 		// [Boolean] : When toggled to true, module generation catalogues protected members for attachment to internal superclass "public" instances
-		superMode: false,
+		inSuperMode: false,
 
 		/**
 		 * ## - Core.main()
@@ -725,7 +725,7 @@
 				static: {}
 			};
 
-			if (Core.superMode) {
+			if (Core.inSuperMode) {
 				table.protected = {};
 				table.protectedNames = [];
 			}
@@ -831,7 +831,7 @@
 				}
 			}
 
-			if (Core.superMode && object.isProtected) {
+			if (Core.inSuperMode && object.isProtected) {
 				memberTable.protected[object.name] = object.value;
 			}
 
@@ -880,7 +880,7 @@
 				A.bindReference(primitive.name, memberTable.public, memberTable.class);
 			}
 
-			if (Core.superMode && primitive.isProtected) {
+			if (Core.inSuperMode && primitive.isProtected) {
 				A.bindReference(primitive.name, memberTable.protected, memberTable.class);
 			}
 
@@ -926,7 +926,7 @@
 			A.extend(memberTable.public, members.public);
 			A.saveKeys(memberTable.public, memberTable.publicNames);
 
-			if (Core.superMode) {
+			if (Core.inSuperMode) {
 				A.extend(memberTable.protected, members.protected);
 				A.saveKeys(memberTable.protected, memberTable.protectedNames);
 			}
@@ -1074,6 +1074,22 @@
 		definedTypes: {},
 
 		/**
+		 * ## - Modules.getDefiner()
+		 *
+		 * Returns a special function which receives and stores a builder function for a module. In the case of classes,
+		 * this function will have additional properties applied to it which offer chainable class customization methods.
+		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
+		 * @param {context} [Object] : The context to bind the definer to
+		 * @returns [Function]
+		 */
+		getDefiner: function (context) {
+			return A.bind(function definer(builder){
+				this.builder = builder;
+				Modules.queue[this.name] = this;
+			}, context);
+		},
+
+		/**
 		 * ## - Modules.isReady()
 		 *
 		 * Determines whether a module has been defined and removed from the pending queue
@@ -1175,7 +1191,7 @@
 		/**
 		 * ## - Modules.inherit()
 		 *
-		 * Instantiates and binds superclasses to a derived class instance
+		 * Instantiates and binds superclasses to a derived class or internal derived superclass instance
 		 * @param {instance} [Object] : The derived class instance
 		 * @param {supers} [Array<String>] : A list of superclasses by name
 		 */
@@ -1191,6 +1207,22 @@
 					});
 				}
 			}
+		},
+
+		/**
+		 * ## - Modules.initialize()
+		 *
+		 * Runs and deletes the new() initializer function for a newly-constructed class and returns the public class instance
+		 * @param {instance} [Object] : The internal class instance
+		 * @param {args} [Arguments] : Arguments for the initializer
+		 * @returns {instance.proxy} [Object]
+		 */
+		initialize: function (instance, args) {
+			instance.new = A.func(instance.new);
+			instance.new.apply(instance, args);
+
+			delete instance.new;
+			return instance.proxy;
 		},
 
 		/**
@@ -1215,10 +1247,7 @@
 				var instance = Object.create(MemberTable.class);
 
 				Members.bind(MemberTable.publicNames, (instance.proxy = {}), instance);
-
-				if (supers.length > 0) {
-					Modules.inherit(instance, supers);
-				}
+				Modules.inherit(instance, supers);
 
 				return Modules.initialize(instance, arguments);
 			}
@@ -1229,12 +1258,12 @@
 					return;
 				}
 
-				Core.superMode = Modules.isInherited(definition);
+				Core.inSuperMode = Modules.isInherited(definition);
 				MemberTable = Members.buildMemberTable(members, Constructor);
 				supers = supers.concat(superclasses);
 
-				if (Core.superMode) {
-					Supers.buildSuperConstructor(definition.name, MemberTable);
+				if (Core.inSuperMode) {
+					Supers.buildSuperConstructor(definition.name, MemberTable, superclasses);
 				}
 
 				if (supers.length > 0) {
@@ -1243,38 +1272,6 @@
 			});
 
 			Modules.defined[module] = Constructor;
-		},
-
-		/**
-		 * ## - Modules.initialize()
-		 *
-		 * Runs and deletes the new() initializer function for a newly-constructed class and returns the public class instance
-		 * @param {instance} [Object] : The internal class instance
-		 * @param {args} [Arguments] : Arguments for the initializer
-		 * @returns {instance.proxy} [Object]
-		 */
-		initialize: function (instance, args) {
-			instance.new = A.func(instance.new);
-			instance.new.apply(instance, args);
-
-			delete instance.new;
-			return instance.proxy;
-		},
-
-		/**
-		 * ## - Modules.getDefiner()
-		 *
-		 * Returns a special function which receives and stores a builder function for a module. In the case of classes,
-		 * this function will have additional properties applied to it which offer chainable class customization methods.
-		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
-		 * @param {context} [Object] : The context to bind the definer to
-		 * @returns [Function]
-		 */
-		getDefiner: function (context) {
-			return A.bind(function definer(builder){
-				this.builder = builder;
-				Modules.queue[this.name] = this;
-			}, context);
 		}
 	};
 
@@ -1291,11 +1288,12 @@
 		 * ## - Supers.buildSuperConstructor()
 		 *
 		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation.
-		 * Called only for classes which are to be inherited after their base member table is generated.
+		 * Called only for classes which are to be inherited, and only after their base member table is built.
 		 * @param {name} [String] : The class name
-		 * @param {members} [Object] : The class member tree
+		 * @param {memberable} [Object] : The class member tree
+		 * @param {deepSupers} [Array<String>] : Superclasses of the superclass, where applicable
 		 */
-		buildSuperConstructor: function (name, memberTable) {
+		buildSuperConstructor: function (name, memberTable, deepSupers) {
 			var publicNames = memberTable.publicNames;
 			var protectedNames = memberTable.protectedNames;
 
@@ -1312,6 +1310,8 @@
 				Members.bind(publicNames, derivedInstance, superInstance, true);
 				Members.bind(publicNames, derivedInstance.proxy, superInstance, true);
 				Members.bind(protectedNames, derivedInstance, superInstance, true);
+
+				Modules.inherit(superInstance, deepSupers);
 
 				return superInstance.proxy;
 			}
