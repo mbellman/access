@@ -5,7 +5,7 @@
 	 * ## - InstantiationException()
 	 *
 	 * An exception for instantiation of non-instantiable modules
-	 * @param {name} [String] : The name of the module
+	 * @param {name} [String] : The module name
 	 */
 	function InstantiationException (name) {
 		this.toString = function () {
@@ -29,8 +29,8 @@
 	 * ## - InterfaceExtendedException()
 	 *
 	 * An exception for attempting to extend, rather than implement, an interface
-	 * @param {interfaceName} [String] : The name of the interface
-	 * @param {className} [String] : The name of the offending class
+	 * @param {interfaceName} [String] : The interface name
+	 * @param {className} [String] : The offending class name
 	 */
 	function InterfaceExtendedException (interfaceName, className) {
 		this.toString = function () {
@@ -42,12 +42,24 @@
 	 * ## - ClassImplementedException()
 	 *
 	 * An exception for attempting to implement, rather than extend, a class
-	 * @param {className} [String] : The name of the improperly implemented class
-	 * @param {implementationName} [String] : The name of the offending class
+	 * @param {className} [String] : The improperly implemented class name
+	 * @param {implementationName} [String] : The offending class name
 	 */
 	function ClassImplementedException (className, implementationName) {
 		this.toString = function () {
 			return Modules.definedTypes[className] + ' {' + className + '} cannot be implemented by class {' + implementationName + '}';
+		};
+	}
+
+	/**
+	 * ## - FinalExtensionException()
+	 *
+	 * An exception for attempting to extend a final class
+	 * @param {className} [String] : The final class name
+	 */
+	function FinalExtensionException (className) {
+		this.toString = function () {
+			return Modules.types.FINAL_CLASS + ' {' + className + '} cannot be extended';
 		};
 	}
 
@@ -1159,7 +1171,7 @@
 		 * @returns [Boolean]
 		 */
 		isInherited: function (definition) {
-			return (Modules.inherited[definition.name] === true && definition.type !== Modules.types.FINAL_CLASS);
+			return (Modules.inherited[definition.name] === true);
 		},
 
 		/**
@@ -1324,6 +1336,27 @@
 		memberTables: {},
 
 		/**
+		 * ## - Supers.canConstruct()
+		 *
+		 * Determines whether a superclass can be constructed
+		 * @param {superclass} [String] : The superclass name
+		 * @throws [FinalExtensionException]
+		 * @returns [Boolean]
+		 */
+		canConstruct: function (superclass) {
+			try {
+				if (Modules.typeOf(superclass) === Modules.types.FINAL_CLASS) {
+					throw new FinalExtensionException(superclass);
+				}
+			} catch (e) {
+				Core.raiseException(e);
+				return false;
+			}
+
+			return true;
+		},
+
+		/**
 		 * ## - Supers.buildSuperConstructor()
 		 *
 		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation.
@@ -1333,6 +1366,10 @@
 		 * @param {deepSupers} [Array<String>] : Superclasses of the superclass, where applicable
 		 */
 		buildSuperConstructor: function (name, memberTable, deepSupers) {
+			if (!Supers.canConstruct(name)) {
+				return;
+			}
+
 			var publicNames = memberTable.publicNames;
 			var protectedNames = memberTable.protectedNames;
 
@@ -1378,7 +1415,6 @@
 					}
 				});
 
-				// TODO: See about automatically cloning, rather than proxying, static members
 				Members.bind(publicStaticMembers, constructor, memberTable.static);
 			});
 		},
@@ -1389,6 +1425,7 @@
 		 * Instantiates a superclass, binding its public and protected members onto the derived class instance
 		 * @param {superclass} [String] : The superclass name
 		 * @param {derivedInstance} [Object] : The derived class instance
+		 * @returns [SuperConstructor]
 		 */
 		construct: function (superclass, derivedInstance) {
 			return new Supers.constructors[superclass](derivedInstance);
@@ -1622,10 +1659,37 @@
 	 *
 	 * Returns an instance of the internal ClassDefinition utility
 	 * @param {name} [String] : The name of the class
+	 * @returns [ClassDefinition]
 	 */
 	function Class (name) {
 		return new ClassDefinition(name);
 	}
+
+	/**
+	 * ### - Library method: Abstract.Class()
+	 *
+	 * Shorthand for creating a ClassDefinition instance of type 'Abstract Class'
+	 * @param {name} [String] : The name of the class
+	 * @returns [ClassDefinition]
+	 */
+	var Abstract = {
+		Class: function (name) {
+			return new ClassDefinition(name, Modules.types.ABSTRACT_CLASS);
+		}
+	};
+
+	/**
+	 * ### - Library method: Final.Class()
+	 *
+	 * Shorthand for creating a ClassDefinition instance of type 'Final Class'
+	 * @param {name} [String] : The name of the class
+	 * @returns [ClassDefinition]
+	 */
+	var Final = {
+		Class: function (name) {
+			return new ClassDefinition(name, Modules.types.FINAL_CLASS);
+		}
+	};
 
 	/**
 	 * ### - Library method: Interface()
@@ -1644,6 +1708,8 @@
 		include: include,
 		main: main,
 		Class: Class,
+		Abstract: Abstract,
+		Final: Final,
 		Interface: Interface
 	};
 
