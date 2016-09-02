@@ -458,41 +458,6 @@
 		},
 
 		/**
-		 * ## - A.extendOrDeleteEach()
-		 *
-		 * Either extends or deletes properties of the first element in multiple object arrays based on the remaining elements
-		 * @param {action} [String] : The action to perform (either 'extend' or 'delete')
-		 * @param {array} [Array<Array<Object>>] : A multidimensional array containing sub-arrays of objects to pass into A.extend() or A.delete()
-		 */
-		extendOrDeleteEach: function (action, array) {
-			action = A[action];
-
-			A.eachInArray(array, function(objects){
-				action.apply(null, objects);
-			});
-		},
-
-		/**
-		 * ## - A.extendEach()
-		 *
-		 * Calls A.extendOrDeleteEach() with 'extend' on an array of object arrays
-		 * @param {[array1, [array2, [...]]]} [Array<Array<Object>>] : An array containing object arrays for each A.extend() call
-		 */
-		extendEach: function () {
-			A.extendOrDeleteEach('extend', A.argsToArray(arguments));
-		},
-
-		/**
-		 * ## - A.deleteEach()
-		 *
-		 * Calls A.extendOrDeleteEach() with 'delete' on an array of object arrays
-		 * @param {[array1, [array2, [...]]]} [Array<Array<Object>>] : An array containing object arrays for each A.delete() call
-		 */
-		deleteEach: function () {
-			A.extendOrDeleteEach('delete', A.argsToArray(arguments));
-		},
-
-		/**
 		 * ## - A.saveKeys()
 		 *
 		 * Copies each key name from an object into an array
@@ -1006,7 +971,7 @@
 			A.setWritable(instance, key, true);
 			delete instance[key];
 
-			if (instance.hasOwnProperty('proxy') && instance.proxy.hasOwnProperty(key)) {
+			if (!!instance.proxy && instance.proxy.hasOwnProperty(key)) {
 				delete instance.proxy[key];
 			}
 		},
@@ -1272,16 +1237,22 @@
 		/**
 		 * ## - Modules.initialize()
 		 *
-		 * Runs and deletes the new() initializer function for a newly-constructed class and returns the public class instance
+		 * Runs and nullifies the new() initializer function for a newly-constructed class, then returns the public class instance.
+		 * Note: the new() function is still technically accessible from the instance.__proto__.new property, but may throw errors
+		 * when run from that context (regardless, this is not intended usage).
 		 * @param {instance} [Object] : The internal class instance
 		 * @param {args} [Arguments] : Arguments for the initializer
 		 * @returns {instance.proxy} [Object]
 		 */
 		initialize: function (instance, args) {
+			instance.proxy = instance.proxy || {};
 			instance.new = A.func(instance.new);
+
 			instance.new.apply(instance, args);
 
-			delete instance.new;
+			instance.new = null;
+			instance.proxy.new = null;
+
 			return instance.proxy;
 		},
 
@@ -1409,7 +1380,7 @@
 
 				Modules.inherit(superInstance, deepSupers);
 
-				return superInstance.proxy;
+				return Modules.initialize(superInstance);
 			}
 
 			Supers.constructors[name] = SuperConstructor;

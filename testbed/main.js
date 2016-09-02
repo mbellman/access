@@ -5,8 +5,8 @@
 
 	main(function(){
 		var cat = new Cat("Kitty");
-		var shiro = new Cat();
-		var chyatora = new Cat();
+		var shiro = new Cat("Shiro");
+		var chyatora = new Cat("Chyatora");
 
 		shiro.step();
 		shiro.step();
@@ -15,6 +15,8 @@
 		chyatora.meow();
 
 		shiro.getType();
+
+		console.log(shiro.name);
 
 		Organism.getCount();
 	});
