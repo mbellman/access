@@ -398,24 +398,16 @@
 		},
 
 		/**
-		 * ## - A.compare()
+		 * ## - A.eachMultiple()
 		 *
-		 * Compare the properties of an arbitrary number of objects to a target object using a handler function
-		 * (this method is primarily used as a means of refactoring similarities in A.extend() and A.delete())
-		 * @param {objects} [Array:<Object>] : An array of objects, the first of which represents the target object
+		 * Runs an A.eachInObject() loop for each in an array of objects
+		 * @param {objects} [Array:<Object>] : The array of objects
 		 * @param {handler(key, value)} [Function] : A handler function for each property iteration 
 		 */
-		compare: function (objects, handler) {
-			var target = objects[0];
-
-			while (objects.length > 2) {
-				A.compare([target, objects[1]], handler);
-				objects.splice(1, 1);
-			}
-
-			var reference = objects[1];
-
-			A.each(reference, handler);
+		eachMultiple: function (objects, handler) {
+			A.eachInArray(objects, function(object){
+				A.eachInObject(object, handler);
+			});
 		},
 
 		/**
@@ -430,7 +422,9 @@
 			var objects = A.argsToArray(arguments);
 			var target = objects[0];
 
-			A.compare(objects, function(key, value){
+			objects.shift();
+
+			A.eachMultiple(objects, function(key, value){
 				if (A.isTypeOf(value, 'object')) {
 					if (!target.hasOwnProperty(key)) {
 						target[key] = {};
@@ -457,7 +451,9 @@
 			var objects = A.argsToArray(arguments);
 			var target = objects[0];
 
-			A.compare(objects, function(key, value){
+			objects.shift();
+
+			A.eachMultiple(objects, function(key, value){
 				if (target.hasOwnProperty(key)) {
 					delete target[key];
 				}
