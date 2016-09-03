@@ -1,11 +1,23 @@
 (function(){
-	Class('Cat').extends('Animal')(function(public, private, protected){
-		protected.family = "Felidae";
+	Interface('Feline')({
+		color: null,
+
+		meow: function () {},
+		purr: function () {}
+	});
+
+	Class('Cat').extends('Animal').implements('Feline')(function(public, private){
+		private.family = "Felidae";
 		public.name = null;
+		public.color = 'Red';
 
 		public.new = function (name) {
 			this.super.increaseCount();
 			this.name = name;
+		};
+
+		public.purr = function () {
+			console.log("I am a cat who is purring.");
 		};
 
 		public.step = function () {

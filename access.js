@@ -9,19 +9,19 @@
 	 */
 	function InstantiationException (name) {
 		this.toString = function () {
-			return 'Cannot instantiate ' + Modules.typeOf(name) + ' {' + name + '}';
+			return 'Cannot instantiate ' + Modules.typeOf(name) + ' [' + name + ']';
 		};
 	}
 
 	/**
 	 * ## - MultiDefinitionException()
 	 *
-	 * An exception for multiple definitions of a module
-	 * @param {name} [String] : The name of the module
+	 * An exception for multiple definitions of a class
+	 * @param {className} [String] : The name of the class
 	 */
-	function MultiDefinitionException (name) {
+	function MultiDefinitionException (className) {
 		this.toString = function () {
-			return 'Class {' + name + '} cannot be defined more than once';
+			return 'Class [' + className + '] cannot be defined more than once';
 		};
 	}
 
@@ -34,7 +34,7 @@
 	 */
 	function InterfaceExtendedException (interfaceName, className) {
 		this.toString = function () {
-			return 'Interface {' + interfaceName + '} cannot be extended by class {' + className + '}';
+			return 'Interface [' + interfaceName + '] cannot be extended by class [' + className + ']';
 		};
 	}
 
@@ -47,7 +47,7 @@
 	 */
 	function ClassImplementedException (className, implementationName) {
 		this.toString = function () {
-			return Modules.definedTypes[className] + ' {' + className + '} cannot be implemented by class {' + implementationName + '}';
+			return Modules.definedTypes[className] + ' [' + className + '] cannot be implemented by class [' + implementationName + ']';
 		};
 	}
 
@@ -59,7 +59,34 @@
 	 */
 	function FinalExtensionException (className) {
 		this.toString = function () {
-			return Modules.types.FINAL_CLASS + ' {' + className + '} cannot be extended';
+			return Modules.types.FINAL_CLASS + ' [' + className + '] cannot be extended';
+		};
+	}
+
+	/**
+	 * ## - ImplementationException()
+	 *
+	 * An exception for any class insufficiently/improperly implementing an interface
+	 * @param {className} [String] : The offending class name
+	 * @param {interfaceName} [String] : The interface name
+	 * @param {memberName} [String] : The missing/mistyped interface member
+	 */
+	function ImplementationException (className, interfaceName, memberName) {
+		this.toString = function () {
+			return Modules.definedTypes[className] + ' [' + className + '] does not properly implement Interface [' + interfaceName + '] member {' + memberName + '}';
+		};
+	}
+
+	/**
+	 * ## - InterfaceDefinitionException()
+	 *
+	 * An exception for interface members not being of correct typing (null or function)
+	 * @param {interfaceName} [String] : The interface name
+	 * @param {memberName} [String] : The mistyped interface member
+	 */
+	function InterfaceDefinitionException (interfaceName, memberName) {
+		this.toString = function () {
+			return 'Invalid type for member {' + memberName + '} in Interface [' + interfaceName + ']';
 		};
 	}
 
@@ -493,7 +520,7 @@
 	 * Internal core variables and library routines
 	 */
 	var Core = {
-		// [Boolean] : Whether or not the main() application entry point callback has been fired
+		// [Boolean] : Whether the main() application entry point callback is being or has been fired
 		started: false,
 		// [Boolean] : Whether debug mode is on
 		debug: false,
@@ -517,6 +544,21 @@
 		init: function () {
 			Core.started = true;
 			Core.main();
+		},
+
+		/**
+		 * ## - Core.defineModules()
+		 *
+		 * Defines all queued modules
+		 */
+		defineModules: function () {
+			A.each(Modules.queue, function(module, definition){
+				if (definition.type !== Modules.types.INTERFACE) {
+					definition.checkReadyStatus();
+				} else {
+					definition.build();
+				}
+			});
 		},
 
 		/**
@@ -547,21 +589,6 @@
 
 			Core.exceptions.push(message);
 			console.error(message);
-		},
-
-		/**
-		 * ## - Core.defineModules()
-		 *
-		 * Defines all queued modules
-		 */
-		defineModules: function () {
-			A.each(Modules.queue, function(module, definition){
-				if (definition.type !== Modules.types.INTERFACE) {
-					definition.checkReadyStatus();
-				} else {
-					definition.build();
-				}
-			});
 		},
 
 		/**
@@ -837,7 +864,7 @@
 		 * ## - Members.attachSpecialObjectMember()
 		 *
 		 * Attaches/binds final and static object members to their appropriate categories in a class member table
-		 * @param {primitive} [Object] : The special member definition for the primitive
+		 * @param {object} [Object] : The member's special definition (see: Members.defineSpecialMember())
 		 * @param {memberTable} [Object] : The module's categorized members
 		 * @param {constructor} [Function] : The module constructor
 		 */
@@ -869,7 +896,7 @@
 		 * ## - Members.attachSpecialPrimitiveMember()
 		 *
 		 * Attaches/binds final and static primitive members to their appropriate categories in a class member table
-		 * @param {primitive} [Object] : The special member definition for the primitive
+		 * @param {primitive} [Object] : The member's special definition (see: Members.defineSpecialMember())
 		 * @param {memberTable} [Object] : The module's categorized members
 		 * @param {constructor} [Function] : The module constructor
 		 */
@@ -1093,6 +1120,8 @@
 		queue: {},
 		// [Object{Function}] : List of module constructors by name
 		defined: {},
+		// [Object{Object}] : List of interface definition objects
+		interfaces: {},
 		// [Object{String}] : List of modules extended by derived classes
 		inherited: {},
 		// [Object{String}] : List of module types by name
@@ -1101,10 +1130,9 @@
 		/**
 		 * ## - Modules.getDefiner()
 		 *
-		 * Returns a special function which receives and stores a builder function for a module. In the case of classes,
-		 * this function will have additional properties applied to it which offer chainable class customization methods.
-		 * The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
-		 * @param {context} [Object] : The context to bind the definer to
+		 * Returns a special function which receives and stores a builder function for a class, or a definition object for
+		 * an interface. The definer function's context is bound to a ClassDefinition or InterfaceDefinition instance.
+		 * @param {context} [Object] : The ClassDefinition or InterfaceDefinition instance to bind the definer to
 		 * @returns [Function]
 		 */
 		getDefiner: function (context) {
@@ -1151,12 +1179,15 @@
 		/**
 		 * ## - Modules.has()
 		 *
-		 * Determines whether a module has been declared and saved to Modules.defined
+		 * Determines whether a module has been declared and saved
 		 * @param {module} [String] : The module name
 		 * @returns [Boolean]
 		 */
 		has: function (module) {
-			return (Modules.defined.hasOwnProperty(module) && A.isFunction(Modules.defined[module]));
+			return (
+				(Modules.defined.hasOwnProperty(module) && A.isFunction(Modules.defined[module])) ||
+				Modules.interfaces.hasOwnProperty(module)
+			);
 		},
 
 		/**
@@ -1214,6 +1245,41 @@
 		},
 
 		/**
+		 * ## - Modules.verifyImplementation()
+		 *
+		 * Verifies whether an interface has been properly implemented by a class and incorporated into its member table
+		 * @param {className} [String] : The class name
+		 * @param {memberTable} [Object] : The class member table
+		 * @param {interfaceName} [String] : The interface name
+		 * @throws [ImplementationException OR InterfaceDefinitionException]
+		 */
+		verifyImplementation: function (className, memberTable, interfaceName) {
+			try {
+				A.eachInObject(Modules.interfaces[interfaceName], function(member, value){
+					var classHasMember = memberTable.public.hasOwnProperty(member);
+					var memberIsFunction = A.isTypeOf(memberTable.public[member], 'function');
+
+					switch (A.typeOf(value)) {
+						case 'null':
+							if (!classHasMember || memberIsFunction) {
+								throw new ImplementationException(className, interfaceName, member);
+							}
+							break;
+						case 'function':
+							if (!classHasMember || !memberIsFunction) {
+								throw new ImplementationException(className, interfaceName, member);
+							}
+							break;
+						default:
+							throw new InterfaceDefinitionException(interfaceName, member);
+					}
+				});
+			} catch (e) {
+				Core.raiseException(e);
+			}
+		},
+
+		/**
 		 * ## - Modules.inherit()
 		 *
 		 * Instantiates and binds superclasses to a derived class or internal derived superclass instance
@@ -1257,6 +1323,29 @@
 		},
 
 		/**
+		 * ## - Modules.buildClass()
+		 *
+		 * 
+		 */
+		buildClass: function () {
+			// TODO: Migrate module on('built') functionality to this block
+		},
+
+		/**
+		 * ## - Modules.buildInterface()
+		 *
+		 * Stores an interface definition object to a special internal list. Any implementing classes will have their defined
+		 * members checked against the interface to ensure full member adoption.
+		 * @param {name} [String] : The interface name
+		 * @param {members} [Object] : An object containing the interface members
+		 */
+		buildInterface: function (name, members) {
+			delete Modules.defined[name];
+
+			Modules.interfaces[name] = members;
+		},
+
+		/**
 		 * ## - Modules.buildModuleConstructor()
 		 *
 		 * Sets up a module constructor and delegates an event handler to update the module members upon running its builder function
@@ -1271,7 +1360,7 @@
 			var supers = [];
 
 			function Constructor () {
-				if (A.isUndefined(MemberTable) || !Modules.canConstruct(module)) {
+				if (A.isUndefined(MemberTable) || !Modules.canConstruct(module) || !Core.started) {
 					return null;
 				}
 
@@ -1285,13 +1374,15 @@
 
 			Modules.events.on('built', module, function(definition, members, superclasses){
 				if (definition.type === Modules.types.INTERFACE) {
-					// TODO: Save interface members to a special bank for implementation by classes
+					Modules.buildInterface(definition.name, members);
 					return;
 				}
 
 				Core.inSuperMode = Modules.isInherited(definition);
 				MemberTable = Members.buildMemberTable(members, Constructor);
 				supers = supers.concat(superclasses);
+
+				Modules.verifyImplementation(definition.name, MemberTable, definition.implements);
 
 				if (Core.inSuperMode) {
 					Supers.buildSuperConstructor(definition.name, MemberTable, superclasses);
@@ -1353,7 +1444,7 @@
 		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation.
 		 * Called only for classes which are to be inherited, and only after their base member table is built.
 		 * @param {name} [String] : The class name
-		 * @param {memberable} [Object] : The class member tree
+		 * @param {memberTable} [Object] : The class member table
 		 * @param {deepSupers} [Array<String>] : Superclasses of the superclass, where applicable
 		 */
 		buildSuperConstructor: function (name, memberTable, deepSupers) {
@@ -1434,7 +1525,7 @@
 	/**
 	 * ## - InterfaceDefinition()
 	 *
-	 * A special internal constructor which provides an interface definition method
+	 * A special internal constructor which provides an interface definer
 	 * @param {name} [String] : The interface name
 	 * @returns {definer} [Function] : (See: definer())
 	 */
@@ -1445,30 +1536,26 @@
 		this.name = name;
 		// [String] : The interface type; always "Interface"
 		this.type = Modules.types.INTERFACE;
-		// [Function(public)] : A function which defines the interface members
-		this.builder = A.func();
+		// [Object] : A definition object which contains the interface members
+		this.builder = {};
 
 		/**
 		 * ## - InterfaceDefinition.build()
 		 */
-		this.build = function(){
-			var members = {
-				public: {}
-			};
-
+		this.build = function () {
 			delete Modules.queue[this.name];
+			delete Modules.defined[this.name];
+
 			Modules.definedTypes[this.name] = Modules.types.INTERFACE;
 
-			this.builder(members);
-
-			Modules.events.trigger('built', this.name, [this, members]);
+			Modules.events.trigger('built', this.name, [this, this.builder]);
 			Modules.events.trigger('defined', this.name, [this.name]);
 		};
 
 		/**
 		 * ## - definer()
 		 *
-		 * An internal method which receives a builder function to define the members of the interface; exposed by the InterfaceDefinition constructor
+		 * A method which receives the interface definition object
 		 * @param {builder(public)} [Function] : The interface builder function
 		 */
 		var definer = Modules.getDefiner(this);
@@ -1534,17 +1621,16 @@
 		 *
 		 * After definition validation, kicks off the formal definition of class members via the builder function. Upon
 		 * firing the "built" and "defined" events, the class will be ready for instantiation, and derived classes will
-		 * be notified so that they may evaluate their own readiness for building.
+		 * be notified so that they may re-evaluate their own build readiness status.
 		 */
 		this.build = function () {
 			if (this.validate()) {
+				delete Modules.queue[this.name];
+
+				Modules.definedTypes[this.name] = this.type;
 				var members = Members.createMemberTree();
 
-				delete Modules.queue[this.name];
-				Modules.definedTypes[this.name] = this.type;
-
 				this.builder(members.public, members.private, members.protected);
-
 				Modules.events.trigger('built', this.name, [this, members, this.extends]);
 				Modules.events.trigger('defined', this.name, [this.name]);
 			}
@@ -1584,7 +1670,7 @@
 		/**
 		 * ## - definer()
 		 *
-		 * An internal method which receives a builder function to define the members of the class; exposed by the ClassDefinition constructor
+		 * A method which receives a builder function to define the members of the class
 		 * @param {builder(public, private, protected)} [Function] : The class builder function
 		 */
 		var definer = Modules.getDefiner(this);
@@ -1593,15 +1679,16 @@
 		 * ## - definer.extends()
 		 *
 		 * Used to extend a class definition with an arbitrary number of base classes
-		 * @param {classes} [String] : A comma-delimited list of base classes to extend onto the new class
-		 * @returns {definer} [Function] : The definer() method
+		 * @param {classes} [String] : A comma-delimited list of base classes to derive into this class
+		 * @returns {definer} [Function]
 		 */
 		definer.extends = A.bind(function(classes){
 			classes = classes.replace(/\s/g, '').split(',');
 
 			A.each(classes, function(name){
-				this.extends.push(name);
 				Modules.inherited[name] = true;
+
+				this.extends.push(name);
 				Modules.events.on('defined', name, this.checkReadyStatus);
 			}, this);
 
@@ -1612,12 +1699,14 @@
 		 * ## - definer.implements()
 		 *
 		 * Used to implement an interface
-		 * @param {_interface} [String] : The interface name
-		 * @returns {definer} [Function] : The definer() method
+		 * @param {interfaceName} [String] : The interface name
+		 * @returns {definer} [Function]
 		 */
-		definer.implements = A.bind(function(_interface){
-			this.implements = _interface;
-			Modules.events.on('defined', _interface, this.checkReadyStatus);
+		definer.implements = A.bind(function(interfaceName){
+			this.implements = interfaceName;
+
+			Modules.events.on('defined', interfaceName, this.checkReadyStatus);
+
 			return definer;
 		}, this);
 

@@ -12,6 +12,7 @@
 		shiro.step();
 		shiro.step();
 		shiro.meow();
+		shiro.purr();
 		chyatora.meow();
 
 		shiro.getType();
