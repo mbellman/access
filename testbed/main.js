@@ -1,7 +1,7 @@
 (function(){
 	var Cat = include('Cat').from('Application.js');
-	var Animal = include('Animal').from('Application.js');
-	var Organism = include('Organism').from('Application.js');
+	var Animal = get('Animal');
+	var Organism = get('Organism');
 
 	main(function(){
 		var cat = new Cat("Kitty");

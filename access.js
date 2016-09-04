@@ -637,27 +637,6 @@
 		doneTimer: null,
 
 		/**
-		 * ## - Imports.from()
-		 *
-		 * Starts an asynchronous script load request and returns a tentative or complete module constructor; chained to include()
-		 * @param {file} [String] : Script path from Imports.root
-		 * @param {module} [String] : The name of the module constructor
-		 */
-		from: function (file, module) {
-			var script = Imports.root + '/' + file;
-
-			if (!A.isInArray(Imports.scripts, script)) {
-				Imports.load(script);
-			}
-
-			if (A.isTypeOf(module, 'string') && !Modules.has(module)) {
-				Modules.buildModuleConstructor(module);
-			}
-
-			return Modules.get(module);
-		},
-
-		/**
 		 * ## - Imports.load()
 		 *
 		 * Asynchronously loads a JavaScript file, updating Imports.scripts and Imports.pending
@@ -673,6 +652,49 @@
 			script.src = file;
 
 			Core.DOM.append(script);
+		},
+
+		/**
+		 * ## - Imports.import()
+		 *
+		 * Loads a script file if it has not already been loaded/requested
+		 * @param {file} [String] : The script file path
+		 */
+		import: function (file) {
+			var script = Imports.root + '/' + file;
+
+			if (!A.isInArray(Imports.scripts, script)) {
+				Imports.load(script);
+			}
+		},
+
+		/**
+		 * ## - Imports.get()
+		 *
+		 * Retrieves a module constructor, creating the constructor first if necessary
+		 * @param {module} [String] : The module name
+		 * @returns [Function]
+		 */
+		get: function (module) {
+			if (!Modules.has(module)) {
+				Modules.buildModuleConstructor(module);
+			}
+
+			return Modules.get(module);
+		},
+
+		/**
+		 * ## - Imports.from()
+		 *
+		 * Loads a script file and returns a module constructor; chained to global include()
+		 * @param {file} [String] : The script file path
+		 * @param {module} [String] : The name of the module constructor
+		 * @returns [Function] : The module constructor
+		 */
+		from: function (file, module) {
+			Imports.import(file);
+
+			return Imports.get(module);
 		},
 
 		/**
@@ -1714,8 +1736,8 @@
 	/**
 	 * ### - Library method: include()
 	 *
-	 * Specifies a module to be included from a particular script; returns a chainable
-	 * method for specifying the script file path which invokes Imports.from()
+	 * Specifies a module to be retrieved from a particular script; returns a chainable method
+	 * for specifying the script file, finally returning the module via Imports.from()
 	 * @param {module} [String] : The name of the module
 	 * @returns [Object]
 	 */
@@ -1726,6 +1748,27 @@
 			}
 		};
 	}
+
+	/**
+	 * ### - Library method: get()
+	 *
+	 * Retrieves a specific module without requiring a script path
+	 * @param {module} [String] : The module name
+	 * @returns [Function OR Object]
+	 */
+	function get (module) {
+		return Imports.get(module);
+	};
+
+	/**
+	 * ### - Library method: include.load()
+	 *
+	 * Loads a script file
+	 * @param {file} [String] : The file name
+	 */
+	function load (file) {
+		Imports.import(file);
+	};
 
 	/**
 	 * ### - Library method: main()
@@ -1792,6 +1835,8 @@
 	 */
 	var AccessUtilities = {
 		include: include,
+		get: get,
+		load: load,
 		main: main,
 		Class: Class,
 		Abstract: Abstract,
