@@ -16,12 +16,12 @@
 	/**
 	 * ## - MultiDefinitionException()
 	 *
-	 * An exception for multiple definitions of a class
-	 * @param {className} [String] : The name of the class
+	 * An exception for multiple definitions of a module
+	 * @param {module} [String] : The name of the module
 	 */
-	function MultiDefinitionException (className) {
+	function MultiDefinitionException (module) {
 		this.toString = function () {
-			return 'Class [' + className + '] cannot be defined more than once';
+			return 'Module [' + module + '] cannot be defined more than once';
 		};
 	}
 
@@ -731,7 +731,7 @@
 			/**
 			 * ## - Imports.on.loadedOne()
 			 *
-			 * Returns a custom single-script load completion handler function which removes the script node from the DOM,
+			 * Returns a custom single-script load handler which resets the namespace, removes the script node from the DOM,
 			 * decrements Imports.pending, and queues the Imports.checkRemaining() process if no remaining scripts are pending
 			 * @param {script} [HTMLElement] : The script tag to remove
 			 * @returns [Function]
@@ -1092,6 +1092,8 @@
 			FINAL_CLASS: 'Final Class',
 			ABSTRACT_CLASS: 'Abstract Class',
 			INTERFACE: 'Interface',
+			FREE_FUNCTION: 'Function',
+			FREE_OBJECT: 'Object',
 
 			// [Array<String>] : Module types which can be instantiated
 			instantiable: [
@@ -1153,15 +1155,17 @@
 			}
 		},
 
-		// [Object{ClassDefinition OR InterfaceDefinition}] : List of modules pending generation
+		// [Object{ClassDefinition OR InterfaceDefinition}] : Modules pending generation
 		queue: {},
-		// [Object{Function}] : List of module constructors by name
+		// [Object{Function}] : Module constructors by name
 		defined: {},
-		// [Object{Object}] : List of interface definition objects
+		// [Object{Object}] : Interface definition objects
 		interfaces: {},
-		// [Object{String}] : List of modules extended by derived classes
+		// [Function OR Object] : Free modules (defined in isolation as individual functions or objects)
+		free: {},
+		// [Object{String}] : Modules extended by derived classes
 		inherited: {},
-		// [Object{String}] : List of module types by name
+		// [Object{String}] : Module types by name
 		definedTypes: {},
 
 		/**
@@ -1202,6 +1206,17 @@
 		},
 
 		/**
+		 * ## - Modules.isFreeFunction()
+		 *
+		 * Determines whether a module is an individually defined free function
+		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
+		 */
+		isFreeFunction: function (module) {
+			return (Modules.free.hasOwnProperty(module) && Modules.definedTypes[module] === Modules.types.FREE_FUNCTION);
+		},
+
+		/**
 		 * ## - Modules.isInherited()
 		 *
 		 * Determines whether a class is inherited. Derived classes invoking .extends() with a particular class name
@@ -1223,19 +1238,19 @@
 		has: function (module) {
 			return (
 				(Modules.defined.hasOwnProperty(module) && A.isFunction(Modules.defined[module])) ||
-				Modules.interfaces.hasOwnProperty(module)
+				(Modules.free.hasOwnProperty(module) || Modules.interfaces.hasOwnProperty(module))
 			);
 		},
 
 		/**
 		 * ## - Modules.get()
 		 *
-		 * Return a module constructor by name, or null if no such module is available
+		 * Return a module by name, or null if no such module is available
 		 * @param {module} [String] : The module name
-		 * @returns [Function]
+		 * @returns [Function OR Object]
 		 */
 		get: function (module) {
-			return Modules.defined[module] || null;
+			return Modules.defined[module] || Modules.free[module] || null;
 		},
 
 		/**
@@ -1383,6 +1398,57 @@
 		},
 
 		/**
+		 * ## - Modules.buildFreeModule()
+		 *
+		 * Internally saves a freely-defined module and defines its type
+		 * @param {module} [String] : The module name
+		 * @param {data} [Function OR Object] : The module definition
+		 * @param {type} [String] : The module type
+		 */
+		buildFreeModule: function (module, data, type) {
+			Modules.free[module] = data;
+			Modules.definedTypes[module] = type;
+
+			if (Core.namespace !== null) {
+				Namespaces.register(module, Core.namespace);
+			}
+		},
+
+		/**
+		 * ## - Modules.buildFreeObject()
+		 *
+		 * Builds a free object module by extending the original saved constructor function with properties and disabling its
+		 * instantiation, effectively treating it as a plain object. 
+		 * @param {module} [String] : The module name
+		 * @param {object} [Object] : The module object definition
+		 */
+		buildFreeObject: function (module, object) {
+			if (Modules.typeOf(module) === Modules.types.FREE_OBJECT) {
+				return;
+			}
+
+			Modules.buildModuleConstructor(module);
+			A.extend(Modules.get(module), object);
+			Modules.buildFreeModule(module, object, Modules.types.FREE_OBJECT);
+		},
+
+		/**
+		 * ## - Modules.buildFreeFunction()
+		 *
+		 * Builds a free function module to be called by the original saved module constructor function, effectively making the
+		 * constructor a non-instantiable wrapper for the new function
+		 * @param {module} [String] : The module name
+		 * @param {fn} [Function] : The module function definition
+		 */
+		buildFreeFunction: function (module, fn) {
+			if (Modules.typeOf(module) === Modules.types.FREE_FUNCTION) {
+				return;
+			}
+
+			Modules.buildFreeModule(module, fn, Modules.types.FREE_FUNCTION);
+		},
+
+		/**
 		 * ## - Modules.buildModuleConstructor()
 		 *
 		 * Sets up a module constructor and delegates an event handler to update the module members upon running its builder function
@@ -1397,7 +1463,12 @@
 			var supers = [];
 
 			function Constructor () {
-				if (A.isUndefined(MemberTable) || !Modules.canConstruct(module) || !Core.started) {
+				if (Modules.isFreeFunction(module)) {
+					Modules.free[module].apply(null, arguments);
+					return;
+				}
+
+				if (!Core.started || !Modules.canConstruct(module) || A.isUndefined(MemberTable)) {
 					return null;
 				}
 
@@ -1570,37 +1641,37 @@
 		 * ## - Namespaces.has()
 		 *
 		 * Determines whether a namespace has been defined
-		 * @param {name} [String] : The namespace name
+		 * @param {space} [String] : The namespace name
 		 * @returns [Boolean]
 		 */
-		has: function (name) {
-			return Namespaces.defined.hasOwnProperty(name);
+		has: function (space) {
+			return Namespaces.defined.hasOwnProperty(space);
 		},
 
 		/**
-		 * ## - Namespaces.verify()
+		 * ## - Namespaces.resolve()
 		 *
 		 * Looks for an existing namespace by name, and creates one if it is not found
-		 * @param {name} [String] : The namespace name
+		 * @param {space} [String] : The namespace name
 		 */
-		verify: function (name) {
-			if (!Namespaces.has(name)) {
-				Namespaces.defined[name] = {};
+		resolve: function (space) {
+			if (!Namespaces.has(space)) {
+				Namespaces.defined[space] = {};
 			}
 		},
 
 		/**
 		 * ## - Namespaces.register()
 		 *
-		 * Saves a class to a namespace
-		 * @param {className} [String] : The class name
-		 * @param {name} [String] : The namespace name
+		 * Saves a non-interface module by name to a namespace
+		 * @param {module} [String] : The module name
+		 * @param {space} [String] : The namespace name
 		 */
-		register: function (className, name) {
-			if (Modules.has(className) && Modules.typeOf(className) !== Modules.types.INTERFACE) {
-				Namespaces.verify(name);
+		register: function (module, space) {
+			if (Modules.has(module) && Modules.typeOf(module) !== Modules.types.INTERFACE) {
+				Namespaces.resolve(space);
 
-				Namespaces.defined[name][className] = Modules.get(className);
+				Namespaces.defined[space][module] = Modules.get(module);
 			}
 		}
 	};
@@ -1806,6 +1877,31 @@
 	}
 
 	/**
+	 * ### - Library method: namespace()
+	 *
+	 * Sets a namespace to apply to the remaining modules inside a file
+	 * @param {name} [String] : The namespace name
+	 */
+	function namespace (name) {
+		Core.namespace = name;
+	}
+
+	/**
+	 * ### - Library method: use.namespace()
+	 *
+	 * Imports an internal namespace object, creating one if it does not already exist
+	 * @param {name} [String] : The namespace name
+	 * @returns [Object]
+	 */
+	var use = {
+		namespace: function (name) {
+			Namespaces.resolve(name);
+
+			return Namespaces.defined[name];
+		}
+	};
+
+	/**
 	 * ### - Library method: include()
 	 *
 	 * Either just specifies a script file to load, or specifies a module to be retrieved from
@@ -1838,29 +1934,20 @@
 	}
 
 	/**
-	 * ### - Library method: namespace()
+	 * ### - Library method: define()
 	 *
-	 * Sets a namespace to apply to the remaining modules inside a file
-	 * @param {name} [String] : The namespace name
+	 * Defines a free function or object module by name
+	 * @param {module} [String] : The module name
+	 * @param {definition} [Function OR Object] : The module definition
+	 * @throws [MultiDefinitionException]
 	 */
-	function namespace (name) {
-		Core.namespace = name;
-	}
-
-	/**
-	 * ### - Library method: use.namespace()
-	 *
-	 * Imports an internal namespace object, creating one if it does not already exist
-	 * @param {name} [String] : The namespace name
-	 * @returns [Object]
-	 */
-	var use = {
-		namespace: function (name) {
-			Namespaces.verify(name);
-
-			return Namespaces.defined[name];
+	function define (module, definition) {
+		if (A.isFunction(definition)) {
+			Modules.buildFreeFunction(module, definition);
+		} else if (A.isObject(definition)) {
+			Modules.buildFreeObject(module, definition);
 		}
-	};
+	}
 
 	/**
 	 * ### - Library method: main()
@@ -1934,7 +2021,8 @@
 		Class: Class,
 		Abstract: Abstract,
 		Final: Final,
-		Interface: Interface
+		Interface: Interface,
+		define: define
 	};
 
 	// Export library utilities to the global scope

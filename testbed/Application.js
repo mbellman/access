@@ -68,4 +68,12 @@
 			console.log("There are " + this.count + " organisms!");
 		};
 	});
+
+	define('SayHello', function () {
+		console.log('Hello!');
+	});
+
+	define('FreeObject', {
+		value: 10
+	});
 })();

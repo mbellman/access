@@ -2,6 +2,7 @@
 	include('Application.js');
 
 	var App = use.namespace('App');
+	var FreeObject = include('FreeObject').from('Application.js');
 
 	main(function(){
 		var cat = new App.Cat("Kitty");
@@ -20,5 +21,9 @@
 		console.log(shiro.name);
 
 		App.Organism.getCount();
+
+		App.SayHello();
+
+		console.log(FreeObject.value);
 	});
 })();
