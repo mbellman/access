@@ -401,7 +401,7 @@
 		 * ## - A.eachMultiple()
 		 *
 		 * Runs an A.eachInObject() loop for each in an array of objects
-		 * @param {objects} [Array:<Object>] : The array of objects
+		 * @param {objects} [Array<Object>] : The array of objects
 		 * @param {handler(key, value)} [Function] : A handler function for each property iteration 
 		 */
 		eachMultiple: function (objects, handler) {
@@ -509,6 +509,19 @@
 			}
 
 			return false;
+		},
+
+		/**
+		 * ## - A.isFilePath()
+		 *
+		 * Tests to see if a string matches a file path pattern
+		 * @param {string} [String] : The string to test
+		 * @returns [Boolean]
+		 */
+		isFilePath: function (string) {
+			var parts = string.split('.');
+
+			return A.isInArray(Imports.filetypes, parts[parts.length - 1]);
 		}
 	};
 
@@ -522,7 +535,9 @@
 		debug: false,
 		// [Boolean] : When toggled to true, module generation catalogues protected members for attachment to internal superclass "public" instances
 		inSuperMode: false,
-		// [Array<String>] : A list of raised exceptions
+		// [String] : An optional namespace to write modules to rather than Modules.defined (a null value prevents any override)
+		namespace: null,
+		// [Array<String>] : A list of raised exception messages
 		exceptions: [],
 
 		/**
@@ -635,6 +650,8 @@
 		pending: 0,
 		// [WindowTimer] : Timeout before verifying that all external script loading has finished/application can be started
 		doneTimer: null,
+		// [Array<String>] : Accepted file types for import-only include()
+		filetypes: ['js'],
 
 		/**
 		 * ## - Imports.load()
@@ -721,6 +738,8 @@
 			 */
 			loadedOne: function (script) {
 				return function () {
+					Core.namespace = null;
+
 					Core.DOM.remove(script);
 
 					if (--Imports.pending <= 0) {
@@ -1499,7 +1518,7 @@
 		/**
 		 * ## - Supers.inheritPublicStaticMembers()
 		 *
-		 * Binds public static base class members to a derived class constructor
+		 * Binds public static superclass members to a derived class constructor
 		 * @param {supers} [Array<String>] : A list of superclasses by name
 		 * @param {constructor} [Function] : The derived class constructor
 		 */
@@ -1537,6 +1556,52 @@
 			}
 
 			return null;
+		}
+	};
+
+	/**
+	 * Namespace utilities
+	 */
+	var Namespaces = {
+		// [Object{Object}] : A list of namespace objects by name
+		defined: {},
+
+		/**
+		 * ## - Namespaces.has()
+		 *
+		 * Determines whether a namespace has been defined
+		 * @param {name} [String] : The namespace name
+		 * @returns [Boolean]
+		 */
+		has: function (name) {
+			return Namespaces.defined.hasOwnProperty(name);
+		},
+
+		/**
+		 * ## - Namespaces.verify()
+		 *
+		 * Looks for an existing namespace by name, and creates one if it is not found
+		 * @param {name} [String] : The namespace name
+		 */
+		verify: function (name) {
+			if (!Namespaces.has(name)) {
+				Namespaces.defined[name] = {};
+			}
+		},
+
+		/**
+		 * ## - Namespaces.register()
+		 *
+		 * Saves a class to a namespace
+		 * @param {className} [String] : The class name
+		 * @param {name} [String] : The namespace name
+		 */
+		register: function (className, name) {
+			if (Modules.has(className) && Modules.typeOf(className) !== Modules.types.INTERFACE) {
+				Namespaces.verify(name);
+
+				Namespaces.defined[name][className] = Modules.get(className);
+			}
 		}
 	};
 
@@ -1597,6 +1662,8 @@
 		this.name = name;
 		// [String] : The class type; defaults to 'Class'
 		this.type = type || Modules.types.CLASS;
+		// [String] : The target namespace for the class
+		this.namespace = Core.namespace;
 		// [Array<String>] : Base classes to extend
 		this.extends = [];
 		// [String] : Interface to implement
@@ -1649,8 +1716,13 @@
 				var members = Members.createMemberTree();
 
 				this.builder(members.public, members.private, members.protected);
+
 				Modules.events.trigger('built', this.name, [this, members, this.extends]);
 				Modules.events.trigger('defined', this.name, [this.name]);
+
+				if (this.namespace !== null) {
+					Namespaces.register(this.name, this.namespace);
+				}
 			}
 		};
 
@@ -1675,7 +1747,7 @@
 		/**
 		 * ## - ClassDefinition.checkReadyStatus()
 		 *
-		 * Check to see whether class is ready to be defined
+		 * Check to see whether the class is ready to be defined, and builds it if so
 		 */
 		this.checkReadyStatus = function () {
 			if (this.allExtensionsDefined()) {
@@ -1736,12 +1808,17 @@
 	/**
 	 * ### - Library method: include()
 	 *
-	 * Specifies a module to be retrieved from a particular script; returns a chainable method
-	 * for specifying the script file, finally returning the module via Imports.from()
-	 * @param {module} [String] : The name of the module
-	 * @returns [Object]
+	 * Either just specifies a script file to load, or specifies a module to be retrieved from
+	 * a particular script defined in the chainable .from() method, and returns the module
+	 * @param {module} [String] : The name of the module, or a plain script file path
+	 * @returns [undefined OR Object]
 	 */
 	function include (module) {
+		if (A.isFilePath(module)) {
+			Imports.import(module);
+			return;
+		}
+
 		return {
 			from: function (file) {
 				return Imports.from(file, module);
@@ -1758,16 +1835,31 @@
 	 */
 	function get (module) {
 		return Imports.get(module);
-	};
+	}
 
 	/**
-	 * ### - Library method: include.load()
+	 * ### - Library method: namespace()
 	 *
-	 * Loads a script file
-	 * @param {file} [String] : The file name
+	 * Sets a namespace to apply to the remaining modules inside a file
+	 * @param {name} [String] : The namespace name
 	 */
-	function load (file) {
-		Imports.import(file);
+	function namespace (name) {
+		Core.namespace = name;
+	}
+
+	/**
+	 * ### - Library method: use.namespace()
+	 *
+	 * Imports an internal namespace object, creating one if it does not already exist
+	 * @param {name} [String] : The namespace name
+	 * @returns [Object]
+	 */
+	var use = {
+		namespace: function (name) {
+			Namespaces.verify(name);
+
+			return Namespaces.defined[name];
+		}
 	};
 
 	/**
@@ -1836,7 +1928,8 @@
 	var AccessUtilities = {
 		include: include,
 		get: get,
-		load: load,
+		use: use,
+		namespace: namespace,
 		main: main,
 		Class: Class,
 		Abstract: Abstract,

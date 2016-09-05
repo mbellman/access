@@ -1,4 +1,6 @@
 (function(){
+	namespace('App');
+
 	Interface('Feline')({
 		color: null,
 

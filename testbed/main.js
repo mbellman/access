@@ -1,12 +1,12 @@
 (function(){
-	var Cat = include('Cat').from('Application.js');
-	var Animal = get('Animal');
-	var Organism = get('Organism');
+	include('Application.js');
+
+	var App = use.namespace('App');
 
 	main(function(){
-		var cat = new Cat("Kitty");
-		var shiro = new Cat("Shiro");
-		var chyatora = new Cat("Chyatora");
+		var cat = new App.Cat("Kitty");
+		var shiro = new App.Cat("Shiro");
+		var chyatora = new App.Cat("Chyatora");
 
 		shiro.step();
 		shiro.step();
@@ -19,6 +19,6 @@
 
 		console.log(shiro.name);
 
-		Organism.getCount();
+		App.Organism.getCount();
 	});
 })();
