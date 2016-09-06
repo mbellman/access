@@ -1355,9 +1355,9 @@
 		/**
 		 * ## - Modules.initialize()
 		 *
-		 * Runs and nullifies the new() initializer function for a newly-constructed class, then returns the public class instance.
-		 * Note: the new() function is still technically accessible from the instance.__proto__.new property, but may throw errors
-		 * when run from that context (regardless, this is not intended usage).
+		 * Runs and nullifies the new() initializer function for a newly-constructed class, then returns the public class instance
+		 * (or the value returned by new() if any). Note: the new() function remains accessible from the instance.__proto__.new
+		 * property, but may throw errors when run from that context. Regardless, this is not intended usage.
 		 * @param {instance} [Object] : The internal class instance
 		 * @param {args} [Arguments] : Arguments for the initializer
 		 * @returns {instance.proxy} [Object]
@@ -1366,10 +1366,14 @@
 			instance.proxy = instance.proxy || {};
 			instance.new = A.func(instance.new);
 
-			instance.new.apply(instance, args);
+			var construct = instance.new.apply(instance, args);
 
 			instance.new = null;
 			instance.proxy.new = null;
+
+			if (!A.isUndefined(construct)) {
+				return construct;
+			}
 
 			return instance.proxy;
 		},
@@ -1889,6 +1893,16 @@
 	}
 
 	/**
+	 * ### - Library method: root()
+	 *
+	 * Sets the root path for script includes
+	 * @param {path} [String] : The root path
+	 */
+	function root (path) {
+		Imports.root = './' + path;
+	}
+
+	/**
 	 * ### - Library method: namespace()
 	 *
 	 * Sets a namespace to apply to the remaining modules inside a file
@@ -2025,6 +2039,7 @@
 	 * Collection of library objects and methods to prepare for global scope exposure
 	 */
 	var AccessUtilities = {
+		root: root,
 		include: include,
 		get: get,
 		use: use,

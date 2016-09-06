@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="UTF-8">
-		<script type="text/javascript" src="../access.js"></script>
+		<script type="text/javascript" src="../../access.js"></script>
 	</head>
 
 	<body>
