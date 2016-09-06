@@ -1375,15 +1375,6 @@
 		},
 
 		/**
-		 * ## - Modules.buildClass()
-		 *
-		 * 
-		 */
-		buildClass: function () {
-			// TODO: Migrate module on('built') functionality to this block
-		},
-
-		/**
 		 * ## - Modules.buildInterface()
 		 *
 		 * Stores an interface definition object to a special internal list. Any implementing classes will have their defined
@@ -1395,6 +1386,38 @@
 			delete Modules.defined[name];
 
 			Modules.interfaces[name] = members;
+		},
+
+		/**
+		 * ## - Modules.buildClass()
+		 *
+		 * Formally "builds" a class by sorting its defined members into a member table. Also builds a special superclass
+		 * constructor if the class is to be extended by any derived classes.
+		 * @param {definition} [ClassDefinition] : The class definition instance
+		 * @param {members} [Object] : The class members as defined within the definition builder function
+		 * @param {superclasses} [Array<String>] : Superclasses of the class, provided to the superclass constructor builder in case of deep inheritance
+		 * @returns [Object] : Data for the class; the categorized member table and the superclasses list
+		 */
+		buildClass: function (definition, members, superclasses) {
+			Core.inSuperMode = Modules.isInherited(definition);
+
+			var constructor = Modules.get(definition.name);
+			var memberTable = Members.buildMemberTable(members, constructor);
+
+			Modules.verifyImplementation(definition.name, memberTable, definition.implements);
+
+			if (Core.inSuperMode) {
+				Supers.buildSuperConstructor(definition.name, memberTable, superclasses);
+			}
+
+			if (superclasses.length > 0) {
+				Supers.inheritPublicStaticMembers(superclasses, constructor);
+			}
+
+			return {
+				memberTable: memberTable,
+				supers: superclasses
+			};
 		},
 
 		/**
@@ -1460,12 +1483,11 @@
 			}
 
 			var MemberTable;
-			var supers = [];
+			var supers;
 
 			function Constructor () {
 				if (Modules.isFreeFunction(module)) {
-					Modules.free[module].apply(null, arguments);
-					return;
+					return Modules.free[module].apply(null, arguments);
 				}
 
 				if (!Core.started || !Modules.canConstruct(module) || A.isUndefined(MemberTable)) {
@@ -1483,21 +1505,11 @@
 			Modules.events.on('built', module, function(definition, members, superclasses){
 				if (definition.type === Modules.types.INTERFACE) {
 					Modules.buildInterface(definition.name, members);
-					return;
-				}
+				} else {
+					var classData = Modules.buildClass(definition, members, superclasses);
 
-				Core.inSuperMode = Modules.isInherited(definition);
-				MemberTable = Members.buildMemberTable(members, Constructor);
-				supers = supers.concat(superclasses);
-
-				Modules.verifyImplementation(definition.name, MemberTable, definition.implements);
-
-				if (Core.inSuperMode) {
-					Supers.buildSuperConstructor(definition.name, MemberTable, superclasses);
-				}
-
-				if (supers.length > 0) {
-					Supers.inheritPublicStaticMembers(supers, Constructor);
+					MemberTable = classData.memberTable;
+					supers = classData.supers;
 				}
 			});
 
