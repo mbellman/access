@@ -4,7 +4,7 @@ Class('TestClass')(function(public, private){
 	public.final.value = 15;
 	public.static.string = "Static message";
 	private.static.sharedSecret = "Private static secret";
-	public.final.static.constant = "Static final message";
+	public.static.final.constant = "Static final message";
 
 	private.getSecret = function () {
 		return "Secret message!";
@@ -19,7 +19,7 @@ Class('TestClass')(function(public, private){
 	};
 
 	public.getNumber = function () {
-		return this.number
+		return this.number;
 	};
 
 	public.setNumber = function (number) {
