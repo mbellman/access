@@ -1456,7 +1456,6 @@
 		 * @param {instance} [Object] : The class instance
 		 * @param {supers} [Array<String>] : A list of superclasses by name
 		 * @param {args} [Arguments] : Arguments for the initializer
-		 * @returns {instance.proxy} [Object]
 		 */
 		initialize: function (module, instance, supers, args) {
 			instance.proxy = instance.proxy || {};
