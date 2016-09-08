@@ -6,6 +6,14 @@
 	main(function(){
 		describe('Single-class example', function () {
 			describe('Class instantiation', function () {
+				it('Should create an instance of the class', function () {
+					var testClass = new TestClass();
+
+					assert(testClass.is('TestClass'));
+				});
+			});
+
+			describe('Public and private members', function () {
 				it('Should restrict member access', function () {
 					var testClass = new TestClass();
 

@@ -192,6 +192,18 @@
 		},
 
 		/**
+		 * ## - A.has()
+		 *
+		 * Determines whether an object contains a property
+		 * @param {object} [Object] : The object to check
+		 * @param {property} [String] : The property to search for
+		 * @returns [Boolean]
+		 */
+		has: function (object, property) {
+			return object.hasOwnProperty(property);
+		},
+
+		/**
 		 * ## - A.func()
 		 *
 		 * Evaluates whether or not a variable assignee is already a function, and returns
@@ -1353,18 +1365,68 @@
 		},
 
 		/**
+		 * ## - Modules.bindMethodNew()
+		 *
+		 * Binds a special new() constructor method to an instance only if one has not already been set
+		 * @param {instance} [Object] : The class instance
+		 */
+		bindMethodNew: function (instance) {
+			instance.new = A.func(instance.new);
+		},
+
+		/**
+		 * ## - Modules.bindMethodIs()
+		 *
+		 * Binds a special type check method to an instance upon instantiation. Type checking will search upward through the super
+		 * tree, if applicable, to ensure that a derived class is also of a superclass type.
+		 * @param {instance} [Object] : The class instance
+		 * @param {module} [String] : The name of the instance's class
+		 */
+		bindMethodIs: function (instance, module) {
+			/**
+			 * @param {type} [String] : The class name to check against
+			 */
+			instance.proxy.is = instance.is = function (type) {
+				if (type === module) {
+					return true;
+				}
+
+				if (A.has(instance, 'super')) {
+					if (A.has(instance.super, 'proxy')) {
+						return instance.super.is(type);
+					} else {
+						var isSuperOfType = false;
+
+						A.eachInObject(instance.super, function (superName) {
+							if (instance.super[superName].is(type)) {
+								return !(isSuperOfType = true);
+							}
+						});
+
+						return isSuperOfType;
+					}
+				}
+
+				return false;
+			};
+		},
+
+		/**
 		 * ## - Modules.initialize()
 		 *
-		 * Runs and nullifies the new() initializer function for a newly-constructed class, then returns the public class instance
-		 * (or the value returned by new() if any). Note: the new() function remains accessible from the instance.__proto__.new
-		 * property, but may throw errors when run from that context. Regardless, this is not intended usage.
-		 * @param {instance} [Object] : The internal class instance
+		 * Binds new() and is() methods to an instance, runs and nullifies the new() initializer function for the instance, then
+		 * returns the public instance proxy (or the value returned by new() if any). Note: the new() function remains accessible
+		 * via instance.__proto__.new, but may break when run from that context (regardless, this is not intended usage).
+		 * @param {module} [String] : The class name
+		 * @param {instance} [Object] : The class instance
 		 * @param {args} [Arguments] : Arguments for the initializer
 		 * @returns {instance.proxy} [Object]
 		 */
-		initialize: function (instance, args) {
+		initialize: function (module, instance, args) {
 			instance.proxy = instance.proxy || {};
-			instance.new = A.func(instance.new);
+
+			Modules.bindMethodNew(instance);
+			Modules.bindMethodIs(instance, module);
 
 			var construct = instance.new.apply(instance, args);
 
@@ -1503,7 +1565,7 @@
 				Members.bind(MemberTable.publicNames, (instance.proxy = {}), instance);
 				Modules.inherit(instance, supers);
 
-				return Modules.initialize(instance, arguments);
+				return Modules.initialize(module, instance, arguments);
 			}
 
 			Modules.events.on('built', module, function(definition, members, superclasses){
@@ -1534,25 +1596,25 @@
 		 * ## - Supers.has()
 		 *
 		 * Determines whether a specific superclass constructor has been created
-		 * @param {superclass} [String] : The superclass name
+		 * @param {module} [String] : The superclass name
 		 * @returns [Boolean]
 		 */
-		has: function (superclass) {
-			return (Supers.constructors.hasOwnProperty(superclass) && Supers.memberTables.hasOwnProperty(superclass));
+		has: function (module) {
+			return (Supers.constructors.hasOwnProperty(module) && Supers.memberTables.hasOwnProperty(module));
 		},
 
 		/**
 		 * ## - Supers.canConstruct()
 		 *
 		 * Determines whether a superclass can be constructed
-		 * @param {superclass} [String] : The superclass name
+		 * @param {module} [String] : The superclass name
 		 * @throws [FinalExtensionException]
 		 * @returns [Boolean]
 		 */
-		canConstruct: function (superclass) {
+		canConstruct: function (module) {
 			try {
-				if (Modules.typeOf(superclass) === Modules.types.FINAL_CLASS) {
-					throw new FinalExtensionException(superclass);
+				if (Modules.typeOf(module) === Modules.types.FINAL_CLASS) {
+					throw new FinalExtensionException(module);
 				}
 			} catch (e) {
 				Core.raiseException(e);
@@ -1567,12 +1629,12 @@
 		 *
 		 * Creates a special Superclass constructor to be set on the internal "super" property of any derived classes at instantiation.
 		 * Called only for classes which are to be inherited, and only after their base member table is built.
-		 * @param {name} [String] : The class name
+		 * @param {module} [String] : The class name
 		 * @param {memberTable} [Object] : The class member table
 		 * @param {deepSupers} [Array<String>] : Superclasses of the superclass, where applicable
 		 */
-		buildSuperConstructor: function (name, memberTable, deepSupers) {
-			if (!Supers.canConstruct(name)) {
+		buildSuperConstructor: function (module, memberTable, deepSupers) {
+			if (!Supers.canConstruct(module)) {
 				return;
 			}
 
@@ -1595,11 +1657,11 @@
 
 				Modules.inherit(superInstance, deepSupers);
 
-				return Modules.initialize(superInstance);
+				return Modules.initialize(module, superInstance);
 			}
 
-			Supers.constructors[name] = SuperConstructor;
-			Supers.memberTables[name] = memberTable;
+			Supers.constructors[module] = SuperConstructor;
+			Supers.memberTables[module] = memberTable;
 		},
 
 		/**
