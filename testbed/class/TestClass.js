@@ -1,10 +1,15 @@
 Class('TestClass')(function(public, private){
 	private.number = 10;
 	public.word = "Hello";
+	public.name = null;
 	public.final.value = 15;
 	public.static.string = "Static message";
 	private.static.sharedSecret = "Private static secret";
 	public.static.final.constant = "Static final message";
+
+	public.new = function (name) {
+		this.name = name;
+	};
 
 	private.getSecret = function () {
 		return "Secret message!";

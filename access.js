@@ -1098,6 +1098,19 @@
 	 * Module utilities
 	 */
 	var Modules = {
+		// [Object{ClassDefinition OR InterfaceDefinition}] : Modules pending generation
+		queue: {},
+		// [Object{Function}] : Module constructors by name
+		defined: {},
+		// [Object{Object}] : Interface objects
+		interfaces: {},
+		// [Object{Function OR Object}] : Free modules (defined in isolation as individual functions or objects)
+		free: {},
+		// [Object{String}] : Modules extended by derived classes
+		inherited: {},
+		// [Object{String}] : Module types by name
+		definedTypes: {},
+
 		// [Object{*}] : Module type names
 		types: {
 			CLASS: 'Class',
@@ -1167,18 +1180,84 @@
 			}
 		},
 
-		// [Object{ClassDefinition OR InterfaceDefinition}] : Modules pending generation
-		queue: {},
-		// [Object{Function}] : Module constructors by name
-		defined: {},
-		// [Object{Object}] : Interface definition objects
-		interfaces: {},
-		// [Function OR Object] : Free modules (defined in isolation as individual functions or objects)
-		free: {},
-		// [Object{String}] : Modules extended by derived classes
-		inherited: {},
-		// [Object{String}] : Module types by name
-		definedTypes: {},
+		// [Function] : Class instance-binding methods
+		bindMethod: {
+			/**
+			 * ## - Modules.bindMethod.new()
+			 *
+			 * Binds a special new() constructor method to a new class instance only if one has not already been set
+			 * @param {instance} [Object] : The class instance
+			 */
+			new: function (instance) {
+				instance.new = A.func(instance.new);
+			},
+
+			/**
+			 * ## - Modules.bindMethod.is()
+			 *
+			 * Binds a special is() type check method to a new class instance. Type checking will search upward through the superclass
+			 * tree, if applicable, to ensure that a derived class also resolves as being of a superclass type.
+			 * @param {instance} [Object] : The class instance
+			 * @param {module} [String] : The name of the instance's class
+			 */
+			is: function (instance, module) {
+				/**
+				 * @param {type} [String] : The class name to check against
+				 */
+				instance.proxy.is = instance.is = function (type) {
+					if (type === module) {
+						return true;
+					}
+
+					if (A.has(instance, 'super')) {
+						if (A.has(instance.super, 'proxy')) {
+							return instance.super.is(type);
+						} else {
+							var isSuperOfType = false;
+
+							A.eachInObject(instance.super, function (superName) {
+								if (instance.super[superName].is(type)) {
+									return !(isSuperOfType = true);
+								}
+							});
+
+							return isSuperOfType;
+						}
+					}
+
+					return false;
+				};
+			},
+
+			/**
+			 * ## - Modules.bindMethod.super()
+			 *
+			 * Binds a special super() method to a class instance which will be replaced by the actual superclass instance after
+			 * instance initialization via new(). Prior to initialization, super() or super.{superClass}() will serve as a means
+			 * of specifying arguments to be passed into superclass constructors.
+			 * @param {instance} [Object] : The class instance
+			 * @param {supers} [Array<String>] : A list of superclasses by name
+			 */
+			super: function (instance, supers) {
+				instance.__superArgs__ = {};
+
+				if (supers.length > 0) {
+					if (supers.length === 1) {
+						instance.super = function () {
+							instance.__superArgs__ = arguments;
+						};
+					} else {
+						instance.super = {};
+
+						A.eachInArray(supers, function(superclass){
+							instance.super[superclass] = function () {
+								instance.__superArgs__[superclass] = arguments;
+							};
+						});
+					}
+				}
+			}
+		},
 
 		/**
 		 * ## - Modules.getDefiner()
@@ -1218,6 +1297,17 @@
 		},
 
 		/**
+		 * ## - Modules.isFreeModule()
+		 *
+		 * Determines whether a module is defined freely as a function or object
+		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
+		 */
+		isFreeModule: function (module) {
+			return Modules.free.hasOwnProperty(module);
+		},
+
+		/**
 		 * ## - Modules.isFreeFunction()
 		 *
 		 * Determines whether a module is an individually defined free function
@@ -1225,7 +1315,18 @@
 		 * @returns [Boolean]
 		 */
 		isFreeFunction: function (module) {
-			return (Modules.free.hasOwnProperty(module) && Modules.definedTypes[module] === Modules.types.FREE_FUNCTION);
+			return (Modules.isFreeModule(module) && Modules.definedTypes[module] === Modules.types.FREE_FUNCTION);
+		},
+
+		/**
+		 * ## - Modules.isFreeObject()
+		 *
+		 * Determines whether a module is an individually defined free object
+		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
+		 */
+		isFreeObject: function (module) {
+			return (Modules.isFreeModule(module) && Modules.definedTypes[module] === Modules.types.FREE_OBJECT);
 		},
 
 		/**
@@ -1312,13 +1413,15 @@
 		 * ## - Modules.verifyImplementation()
 		 *
 		 * Verifies whether an interface has been properly implemented by a class and incorporated into its member table
-		 * @param {className} [String] : The class name
+		 * @param {definition} [String] : The class definition instance
 		 * @param {memberTable} [Object] : The class member table
-		 * @param {interfaceName} [String] : The interface name
 		 * @throws [ImplementationException OR InterfaceDefinitionException]
 		 */
-		verifyImplementation: function (className, memberTable, interfaceName) {
+		verifyImplementation: function (definition, memberTable) {
 			try {
+				var className = definition.name;
+				var interfaceName = definition.implements;
+
 				A.eachInObject(Modules.interfaces[interfaceName], function(member, value){
 					var classHasMember = memberTable.public.hasOwnProperty(member);
 					var memberIsFunction = A.isTypeOf(memberTable.public[member], 'function');
@@ -1344,9 +1447,34 @@
 		},
 
 		/**
+		 * ## - Modules.initialize()
+		 *
+		 * Creates a proxy property on a class instance to be returned by the constructor, binds special methods to the instance,
+		 * and calls the special new() initializer once before promptly removing it. The special super() argument handler is
+		 * replaced in Modules.inherit(), which runs after initalize().
+		 * @param {module} [String] : The class name
+		 * @param {instance} [Object] : The class instance
+		 * @param {supers} [Array<String>] : A list of superclasses by name
+		 * @param {args} [Arguments] : Arguments for the initializer
+		 * @returns {instance.proxy} [Object]
+		 */
+		initialize: function (module, instance, supers, args) {
+			instance.proxy = instance.proxy || {};
+
+			Modules.bindMethod.new(instance);
+			Modules.bindMethod.super(instance, supers);
+			Modules.bindMethod.is(instance, module);
+
+			instance.new.apply(instance, args);
+
+			instance.new = null;
+			instance.proxy.new = null;
+		},
+
+		/**
 		 * ## - Modules.inherit()
 		 *
-		 * Instantiates and binds superclasses to a derived class or internal derived superclass instance
+		 * Instantiates and binds superclasses to a derived class or derived superclass instance
 		 * @param {instance} [Object] : The derived class instance
 		 * @param {supers} [Array<String>] : A list of superclasses by name
 		 */
@@ -1362,82 +1490,6 @@
 					});
 				}
 			}
-		},
-
-		/**
-		 * ## - Modules.bindMethodNew()
-		 *
-		 * Binds a special new() constructor method to an instance only if one has not already been set
-		 * @param {instance} [Object] : The class instance
-		 */
-		bindMethodNew: function (instance) {
-			instance.new = A.func(instance.new);
-		},
-
-		/**
-		 * ## - Modules.bindMethodIs()
-		 *
-		 * Binds a special type check method to an instance upon instantiation. Type checking will search upward through the super
-		 * tree, if applicable, to ensure that a derived class is also of a superclass type.
-		 * @param {instance} [Object] : The class instance
-		 * @param {module} [String] : The name of the instance's class
-		 */
-		bindMethodIs: function (instance, module) {
-			/**
-			 * @param {type} [String] : The class name to check against
-			 */
-			instance.proxy.is = instance.is = function (type) {
-				if (type === module) {
-					return true;
-				}
-
-				if (A.has(instance, 'super')) {
-					if (A.has(instance.super, 'proxy')) {
-						return instance.super.is(type);
-					} else {
-						var isSuperOfType = false;
-
-						A.eachInObject(instance.super, function (superName) {
-							if (instance.super[superName].is(type)) {
-								return !(isSuperOfType = true);
-							}
-						});
-
-						return isSuperOfType;
-					}
-				}
-
-				return false;
-			};
-		},
-
-		/**
-		 * ## - Modules.initialize()
-		 *
-		 * Binds new() and is() methods to an instance, runs and nullifies the new() initializer function for the instance, then
-		 * returns the public instance proxy (or the value returned by new() if any). Note: the new() function remains accessible
-		 * via instance.__proto__.new, but may break when run from that context (regardless, this is not intended usage).
-		 * @param {module} [String] : The class name
-		 * @param {instance} [Object] : The class instance
-		 * @param {args} [Arguments] : Arguments for the initializer
-		 * @returns {instance.proxy} [Object]
-		 */
-		initialize: function (module, instance, args) {
-			instance.proxy = instance.proxy || {};
-
-			Modules.bindMethodNew(instance);
-			Modules.bindMethodIs(instance, module);
-
-			var construct = instance.new.apply(instance, args);
-
-			instance.new = null;
-			instance.proxy.new = null;
-
-			if (!A.isUndefined(construct)) {
-				return construct;
-			}
-
-			return instance.proxy;
 		},
 
 		/**
@@ -1470,7 +1522,7 @@
 			var constructor = Modules.get(definition.name);
 			var memberTable = Members.buildMemberTable(members, constructor);
 
-			Modules.verifyImplementation(definition.name, memberTable, definition.implements);
+			Modules.verifyImplementation(definition, memberTable);
 
 			if (Core.inSuperMode) {
 				Supers.buildSuperConstructor(definition.name, memberTable, superclasses);
@@ -1499,7 +1551,7 @@
 			Modules.definedTypes[module] = type;
 
 			if (Core.namespace !== null) {
-				Namespaces.register(module, Core.namespace);
+				Namespaces.save(module, Core.namespace);
 			}
 		},
 
@@ -1507,12 +1559,15 @@
 		 * ## - Modules.buildFreeObject()
 		 *
 		 * Builds a free object module by extending the original saved constructor function with properties and disabling its
-		 * instantiation, effectively treating it as a plain object. 
+		 * instantiation, effectively treating it as a plain object. (While it would be ideal to save it as a plain object to
+		 * begin with, if a free object module is loaded via include() or get() before its actual definition, a constructor is
+		 * automatically created for return-by-reference, as we can't yet assume whether the module is an object or a class.
+		 * Functions can be invoked OR extended with properties, making them ideal for agnostic module type support.)
 		 * @param {module} [String] : The module name
 		 * @param {object} [Object] : The module object definition
 		 */
 		buildFreeObject: function (module, object) {
-			if (Modules.typeOf(module) === Modules.types.FREE_OBJECT) {
+			if (Modules.isFreeObject(module)) {
 				return;
 			}
 
@@ -1530,7 +1585,7 @@
 		 * @param {fn} [Function] : The module function definition
 		 */
 		buildFreeFunction: function (module, fn) {
-			if (Modules.typeOf(module) === Modules.types.FREE_FUNCTION) {
+			if (Modules.isFreeFunction(module)) {
 				return;
 			}
 
@@ -1540,7 +1595,8 @@
 		/**
 		 * ## - Modules.buildModuleConstructor()
 		 *
-		 * Sets up a module constructor and delegates an event handler to update the module members upon running its builder function
+		 * Sets up a module constructor and delegates an event handler to update the member table/superclass list upon running its builder function.
+		 * (Interfaces will not change these values as they are non-instantiable.)
 		 * @param {module} [String] : The module name
 		 */
 		buildModuleConstructor: function (module) {
@@ -1561,11 +1617,13 @@
 				}
 
 				var instance = Object.create(MemberTable.class);
+				instance.proxy = {};
 
-				Members.bind(MemberTable.publicNames, (instance.proxy = {}), instance);
+				Members.bind(MemberTable.publicNames, instance.proxy, instance);
+				Modules.initialize(module, instance, supers, arguments);
 				Modules.inherit(instance, supers);
 
-				return Modules.initialize(module, instance, arguments);
+				return instance.proxy;
 			}
 
 			Modules.events.on('built', module, function(definition, members, superclasses){
@@ -1584,7 +1642,7 @@
 	};
 
 	/**
-	 * Superclass utilities
+	 * Superclass/inheritance utilities
 	 */
 	var Supers = {
 		// [Object{Function(derivedInstance)}] : A list of superclass constructors by name
@@ -1643,8 +1701,9 @@
 
 			/**
 			 * @param {derivedInstance} [Object] : The derived class instance
+			 * @param {args} [Arguments] : Arguments for the initializer
 			 */
-			function SuperConstructor (derivedInstance) {
+			function SuperConstructor (derivedInstance, args) {
 				var superInstance = Object.create(memberTable.class);
 				superInstance.proxy = {};
 
@@ -1655,9 +1714,10 @@
 				Members.bind(publicNames, derivedInstance.proxy, superInstance, true);
 				Members.bind(protectedNames, derivedInstance, superInstance, true);
 
+				Modules.initialize(module, superInstance, deepSupers, args);
 				Modules.inherit(superInstance, deepSupers);
 
-				return Modules.initialize(module, superInstance);
+				return superInstance.proxy;
 			}
 
 			Supers.constructors[module] = SuperConstructor;
@@ -1700,8 +1760,10 @@
 		 * @returns [new SuperConstructor OR null]
 		 */
 		construct: function (superclass, derivedInstance) {
-			if (Supers.has(superclass)) {
-				return new Supers.constructors[superclass](derivedInstance);
+			if (Supers.has(superclass) && A.isObject(derivedInstance.__superArgs__)) {
+				var args = derivedInstance.__superArgs__[superclass] || derivedInstance.__superArgs__;
+
+				return new Supers.constructors[superclass](derivedInstance, args);
 			}
 
 			return null;
@@ -1739,13 +1801,13 @@
 		},
 
 		/**
-		 * ## - Namespaces.register()
+		 * ## - Namespaces.save()
 		 *
-		 * Saves a non-interface module by name to a namespace
+		 * Saves any non-interface module by name to a namespace
 		 * @param {module} [String] : The module name
 		 * @param {space} [String] : The namespace name
 		 */
-		register: function (module, space) {
+		save: function (module, space) {
 			if (Modules.has(module) && Modules.typeOf(module) !== Modules.types.INTERFACE) {
 				Namespaces.resolve(space);
 
@@ -1870,7 +1932,7 @@
 				Modules.events.trigger('defined', this.name, [this.name]);
 
 				if (this.namespace !== null) {
-					Namespaces.register(this.name, this.namespace);
+					Namespaces.save(this.name, this.namespace);
 				}
 			}
 		};
