@@ -10,7 +10,9 @@ Have you ever:
 * Wanted to use a dumb, all-or-nothing asynchronous module loader with idiosyncratic, non-standard syntax?
 
 ### Introduction
-To start, let's examine a basic program.
+This library provides an ECMAScript 5.1 implementation of some of the rudimentary features one would expect of any classical object-oriented language. Since JavaScript prior to ES6/ES2015/Harmony had no formal concept of classes, and since specification-compliant ES6 omits any explicit declaration of **public**, **private**, **protected**, **final**, or **static** members, **Interfaces**, **Abstract** or **Final** classes, and **namespaces**, the tools included therein provide some means of remedying these problems. (Are they even problems?)
+
+The following is a simple example program, divided into two files:
 
 `main.js`
 ```javascript
@@ -24,6 +26,8 @@ To start, let's examine a basic program.
 	});
 })();
 ```
+
+---
 
 `core/Application.js`
 ```javascript
