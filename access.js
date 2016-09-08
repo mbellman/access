@@ -1215,7 +1215,7 @@
 						} else {
 							var isSuperOfType = false;
 
-							A.eachInObject(instance.super, function (superName) {
+							A.eachInObject(instance.super, function(superName){
 								if (instance.super[superName].is(type)) {
 									return !(isSuperOfType = true);
 								}
