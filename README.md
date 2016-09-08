@@ -12,7 +12,7 @@ Have you ever:
 ### Introduction
 To start, let's examine a basic program.
 
-*main.js*
+`main.js`
 ```javascript
 (function(){
 	var Application = include('Application').from('core/Application.js');
@@ -25,7 +25,7 @@ To start, let's examine a basic program.
 })();
 ```
 
-*core/Application.js*
+`core/Application.js`
 ```javascript
 Class('Application')(function(public){
 	// Constructor method
