@@ -74,17 +74,25 @@ As you can see, `main.js` is the only non-library script which needs to be manua
 
 The `main.js` script is wrapped in a self-invoking anonymous function for scope protection. We simply include a class from a file, designate a main entry point for the program, and kick back until `core/Application.js` has loaded and run.
 
-In `core/Application.js`, we define the **Application** class by name. `Class` is a global library method which takes a class name and returns a function which accepts one argument: another function. For the sake of clarity, we'll call the second function a **builder** function.
+In `core/Application.js`, we define the `Application` class by name. `Class` is a global library method which takes a class name and returns a function which accepts one argument: another function. For the sake of clarity, we'll call the second function a **builder** function.
 
-The **builder** function is not a constructor; it is run only once when the class is first **generated**. To back up a little, no classes are generated until the entire script dependency tree has been resolved. If an included script in turn includes more scripts, the wait continues until no further scripts are pending.
+The builder function is not a constructor; it is run only once when the class is first generated. To back up a little, no classes are generated until the entire script dependency tree has been resolved. If an included script in turn includes more scripts, the wait continues until no further scripts are pending.
 
 ### How it works (in short)
-A class **builder** receives three *object* arguments: `public`, `private`, and `protected`. When passed into the **builder**, each can be freely appended with additional properties corresponding to class members (variables or methods). Once the **builder** finishes, each object is internally copied into another object called a **member table** which represents the whole lineup of class members.
+1. Load all scripts/tentatively define classes using builder functions
+3. Generate all classes by running their builder functions
+4. ...
+5. Instantiate a class
+   1. Create a unique instance of the class member table
+   2. Clone the public members onto a special "proxy" property
+   3. Return the special "proxy" property
+
+A class builder receives three *object* arguments: `public`, `private`, and `protected`. When passed into the builder, each can be freely appended with additional properties corresponding to class members (variables or methods). Once the builder finishes firing, each modified object is internally copied into another object called a **member table**, which represents the whole lineup of class members.
 
 The actual class constructor function, which is retrieved in our example via:
 
 `var Application = include("Application").from("core/Application.js")`
 
-creates a new **instance** object from the stored class member lineup. However, what the constructor exposes is not the **instance**, but a restricted subset of the **instance** corresponding only to the public class members.
+creates a new **instance** object from the stored class member table. However, what the constructor exposes is not the instance, but a restricted subset of the instance corresponding only to the public class members.
 
-To achieve this, a special **proxy** property is attached to the **instance** object. Then, the public class members are attached to the **proxy** property. Only the **proxy** property, rather than the **instance** itself, is returned by the constructor. All of the public members attached to the **proxy** property are then context-bound back to the original **instance**. In this manner any class method can refer to other methods and variables - public, private, or protected - using `this`. Variables referenced and methods called on the public **proxy** all point back to the base **instance**, preserving state singularity.
+To achieve this, a special **proxy** property is attached to the instance object. Then, the public class members are attached to the proxy property. Only the proxy property is returned by the constructor. All of the public members attached to the proxy property are then context-bound back to the original instance. In this manner any class method can refer to other methods and variables - public, private, or protected - using `this`. Variables referenced and methods called on the public proxy all point back to the base instance, preserving state singularity.
