@@ -1,10 +1,10 @@
 # Access
 
 ## Index
-[Introduction](#have-you-ever)
-[Summary](#summary)
-[Beginner's Example](#yeah-okay-i-dont-care)
-[How it Works](#how-it-works-in-short)
+[Introduction](#have-you-ever)  
+[Summary](#summary)  
+[Beginner's Example](#yeah-okay-i-dont-care)  
+[How it Works](#how-it-works-in-short)  
 
 ### Have you ever:
 * Bemoaned the lack of traditional class definitions or classical object-oriented constructs in pre-ES6 JavaScript?
@@ -83,4 +83,4 @@ A class **builder** receives three *object* arguments: `public`, `private`, and 
 
 The actual class constructor function, which is retrieved in our example via `var Application = include("Application").from("core/Application.js")`, creates a new instance *object* from the class member lineup. However, what the constructor exposes is not the instance, but a restricted subset of the instance corresponding only to the public class members. To achieve this, a special **proxy** property is attached to the instance object. Then, the public class members are attached to the **proxy** property. Only the property, rather than the instance itself, is returned by the constructor. All of the public members attached to the **proxy** are then context-bound back to the original instance. In this manner any class method can refer to other methods and variables using `this`. Variables referenced and methods called on the public instance all point back to the base instance, preserving state singularity.
 
-![Figure 1](https://github.com/mbellman/access/tree/master/diagrams/instance.png)
+![Figure 1](https://raw.github.com/mbellman/access/master/diagrams/instance.png)
