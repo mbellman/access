@@ -250,7 +250,7 @@ Class('Bird').implements('IAnimal')(function(public){
 
 ## Free Modules
 
-It is also possible to `define` free functions and objects which can be imported in other files using `get()`.
+It is also possible to define free functions and objects which can be imported in other files using `get()`.
 
 `main.js`
 ```javascript
@@ -318,7 +318,7 @@ Classes and free modules can be grouped into **namespaces** for categorization o
 
 ---
 
-`mathutils.js`
+`js/mathutils.js`
 ```javascript
 namespace('MathUtils');
 
@@ -333,7 +333,7 @@ module('cube', function (n) {
 
 ---
 
-`Vector3.js`
+`js/Vector3.js`
 ```javascript
 namespace('MathUtils');
 
