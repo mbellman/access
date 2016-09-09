@@ -25,12 +25,15 @@ Have you ever:
 This library provides an ECMAScript 5.1 implementation of certain features one would expect of any classical object-oriented language. Since JavaScript prior to ES6/ES2015/Harmony had no formal concept of classes, and since specification-compliant ES6 omits any explicit declaration of **public**, **private**, **protected**, **final**, or **static** members, **Interfaces**, **Abstract** or **Final** classes, and **namespaces**, the tools included therein provide some means of remedying these problems (if you view them as such).
 
 ## Documentation
-[See: /docs](../blob/master/docs)
+[See: /docs](../master/docs)
 
 # Examples
 
+---
 
 ## Index page
+
+Here's the default setup for your index page.
 
 `index.html`
 ```html
@@ -50,7 +53,13 @@ This library provides an ECMAScript 5.1 implementation of certain features one w
 
 ## Single-class application
 
----
+```
+       main.js
+          |
+  core/Application.js
+```
+
+A basic program with a single class called **Application**.
 
 `main.js`
 ```javascript
@@ -80,8 +89,21 @@ Class('Application')(function(public){
 });
 ```
 
+---
 
 ## Multi-class application with inheritance
+
+Programs can be composed of multiple classes, some of which may extend others.
+
+```
+                main.js
+                   |
+          --------------------
+          |                   |
+  js/Application.js      js/Person.js
+                              |
+                         js/Human.js
+```
 
 `main.js`
 ```javascript
@@ -109,7 +131,11 @@ Class('Application')(function(public){
 `js/Application.js`
 ```javascript
 Class('Application')(function(public, private){
-	private.people = {};
+	private.people = null;
+
+	public.new = function () {
+		this.people = {};
+	};
 
 	public.addPerson = function (person) {
 		var name = person.getName();
@@ -163,7 +189,7 @@ Class('Human')(function(public, private, protected){
 
 ## Interfaces
 
-Interfaces here function in a slightly more limited fashion than their counterparts in true object-oriented languages like Java or C#. They cannot be directly referenced, nor can their members. Defining an interface merely defines a list of either **variables** or **methods** which all implementing classes are required to incorporate publicly. Variables are denoted by **null** values and methods by **empty functions**. Interfaces only serve as a means of safeguarding implementing classes against omitting the interface members. They are purely a formality to be used at the discretion of the programmer. With that out of the way...
+Interfaces here function in a slightly more limited fashion than their counterparts in true object-oriented languages like Java or C#. They cannot be directly referenced, nor can their members. Defining an interface merely defines a list of either **variables** or **methods** which all implementing classes are required to incorporate publicly. Interface variables are denoted by **null** values and methods by **empty functions**. Interfaces only serve as a means of safeguarding implementing classes against omitting the interface members. They are purely a formality to be used at the discretion of the programmer. With that out of the way...
 
 `IAnimal.js`
 ```javascript

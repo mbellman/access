@@ -1,5 +1,9 @@
 Class('Application')(function(public, private){
-	private.people = {};
+	private.people = null;
+
+	public.new = function () {
+		this.people = {};
+	};
 
 	public.addPerson = function (person) {
 		var name = person.getName();

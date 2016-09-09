@@ -838,6 +838,9 @@
 		 * ## - Members.defineSpecialMember()
 		 *
 		 * Returns a descriptive definition of static and final module members
+		 * @param {name} [String] : The special member name
+		 * @param {value} [*] : The special member value
+		 * @param {flags} [Object{Boolean}] : Boolean conditions for the special member's possible characteristics (final, static, public, protected)
 		 * @returns [Object]
 		 */
 		defineSpecialMember: function (name, value, flags) {
@@ -912,7 +915,7 @@
 		/**
 		 * ## - Members.attachSpecialObjectMember()
 		 *
-		 * Attaches/binds final and static object members to their appropriate categories in a class member table
+		 * Attaches/binds final and static object members to their appropriate class member table categories
 		 * @param {object} [Object] : The member's special definition (see: Members.defineSpecialMember())
 		 * @param {memberTable} [Object] : The module's categorized members
 		 * @param {constructor} [Function] : The module constructor
@@ -944,7 +947,7 @@
 		/**
 		 * ## - Members.attachSpecialPrimitiveMember()
 		 *
-		 * Attaches/binds final and static primitive members to their appropriate categories in a class member table
+		 * Attaches/binds final and static primitive members to their appropriate class member table categories
 		 * @param {primitive} [Object] : The member's special definition (see: Members.defineSpecialMember())
 		 * @param {memberTable} [Object] : The module's categorized members
 		 * @param {constructor} [Function] : The module constructor
@@ -992,20 +995,17 @@
 		/**
 		 * ## - Members.attachSpecialMembers()
 		 *
-		 * Attaches and binds static and final class members to their appropriate categories in a class member table
+		 * Attaches and binds static and final class members to their appropriate class member table categories
 		 * @param {specialMembers} [Array<Object>] : A list of special member definitions (see: Members.defineSpecialMember())
 		 * @param {memberTable} [Object] : The module's categorized members
 		 * @param {constructor} [Function] : The module constructor
 		 */
 		attachSpecialMembers: function (specialMembers, memberTable, constructor) {
 			A.eachInArray(specialMembers, function(member){
-				switch (A.typeOf(member.value)) {
-					case 'function':
-					case 'object':
-						Members.attachSpecialObjectMember(member, memberTable, constructor);
-						break;
-					default:
-						Members.attachSpecialPrimitiveMember(member, memberTable, constructor);
+				if (A.isTypeOf(member.value, 'function') || A.isTypeOf(member.value, 'object')) {
+					Members.attachSpecialObjectMember(member, memberTable, constructor);
+				} else {
+					Members.attachSpecialPrimitiveMember(member, memberTable, constructor);
 				}
 			});
 		},
