@@ -4,10 +4,10 @@
 [Introduction](#introduction)  
 [Documentation](#documentation)  
 [Examples](#examples)  
-* [Index page](#index-page)  
-* [Single-class application](#single-class-application)  
-* [Multi-class application with inheritance](#multi-class-application-with-inheritance)  
-* [Interfaces](#interfaces)  
+[Example: Index page](#index-page)  
+[Example: Single-class application](#single-class-application)  
+[Example: Multi-class application with inheritance](#multi-class-application-with-inheritance)  
+[Example: Interfaces](#interfaces)  
 [Motivation](#motivation)
 
 ## Introduction
@@ -46,6 +46,7 @@ This library provides an ECMAScript 5.1 implementation of certain features one w
 </html>
 ```
 
+---
 
 ## Single-class application
 
@@ -158,6 +159,7 @@ Class('Human')(function(public, private, protected){
 });
 ```
 
+---
 
 ## Interfaces
 
@@ -230,6 +232,7 @@ Class('Bird').implements('IAnimal')(function(public){
 });
 ```
 
+---
 
 # Motivation
-[...](http://gunshowcomic.com/comics/20120227-robotthatscreams.png)
+[...?](http://gunshowcomic.com/comics/20120227-robotthatscreams.png)
