@@ -493,16 +493,20 @@
 		},
 
 		/**
-		 * ## - A.saveKeys()
+		 * ## - A.getKeyNames()
 		 *
-		 * Copies each key name from an object into an array
-		 * @param {object} [Object] : The object to copy from
-		 * @param {array} [Array<String>] : The array to copy to
+		 * Returns an array containing an object's own enumerable property names
+		 * @param {object} [Object] : The object with the keys to retrieve
+		 * @returns [Array<String>]
 		 */
-		saveKeys: function (object, array) {
+		getKeyNames: function (object) {
+			var names = [];
+
 			A.eachInObject(object, function(key){
-				array.push(key);
+				names.push(key);
 			});
+
+			return names;
 		},
 
 		/**
@@ -545,7 +549,7 @@
 		started: false,
 		// [Boolean] : Whether debug mode is on
 		debug: false,
-		// [Boolean] : When toggled to true, module generation catalogues protected members for attachment to internal superclass "public" instances
+		// [Boolean] : When toggled to true, class generation catalogues protected members for attachment to internal superclass "public" instances
 		inSuperMode: false,
 		// [String] : An optional namespace to write modules to rather than Modules.defined (a null value prevents any override)
 		namespace: null,
@@ -684,12 +688,12 @@
 		},
 
 		/**
-		 * ## - Imports.import()
+		 * ## - Imports.getScript()
 		 *
 		 * Loads a script file if it has not already been loaded/requested
 		 * @param {file} [String] : The script file path
 		 */
-		import: function (file) {
+		getScript: function (file) {
 			var script = Imports.root + '/' + file;
 
 			if (!A.isInArray(Imports.scripts, script)) {
@@ -698,13 +702,13 @@
 		},
 
 		/**
-		 * ## - Imports.get()
+		 * ## - Imports.getModule()
 		 *
-		 * Retrieves a module constructor, creating the constructor first if necessary
+		 * Returns a module constructor, creating the constructor first if necessary
 		 * @param {module} [String] : The module name
 		 * @returns [Function]
 		 */
-		get: function (module) {
+		getModule: function (module) {
 			if (!Modules.has(module)) {
 				Modules.buildModuleConstructor(module);
 			}
@@ -718,24 +722,34 @@
 		 * Loads a script file and returns a module constructor; chained to global include()
 		 * @param {file} [String] : The script file path
 		 * @param {module} [String] : The name of the module constructor
-		 * @returns [Function] : The module constructor
+		 * @returns [Function]
 		 */
 		from: function (file, module) {
-			Imports.import(file);
+			Imports.getScript(file);
 
-			return Imports.get(module);
+			return Imports.getModule(module);
 		},
 
 		/**
 		 * ## - Imports.checkRemaining()
 		 *
-		 * Verifies that no script imports are still pending, and if so
-		 * calls the Imports.on.loadedAll completion handler
+		 * Verifies that no script imports are still pending, and if so calls the Imports.on.loadedAll completion handler
 		 */
 		checkRemaining: function () {
 			if (Imports.pending === 0) {
 				Imports.on.loadedAll();
 			}
+		},
+
+		/**
+		 * ## - Imports.queueCheckRemaining()
+		 *
+		 * Runs Imports.checkRemaining() on a delay, clearing the last queued delay
+		 */
+		queueCheckRemaining: function () {
+			window.clearTimeout(Imports.doneTimer);
+
+			Imports.doneTimer = window.setTimeout(Imports.checkRemaining, 250);
 		},
 
 		// Script load status handlers
@@ -755,8 +769,7 @@
 					Core.DOM.remove(script);
 
 					if (--Imports.pending <= 0) {
-						window.clearTimeout(Imports.doneTimer);
-						Imports.doneTimer = window.setTimeout(Imports.checkRemaining, 250);
+						Imports.queueCheckRemaining();
 					}
 				};
 			},
@@ -858,10 +871,10 @@
 		/**
 		 * ## - Members.getWritableTargets()
 		 *
-		 * Determines which member categories a special member belongs to so its "writable" configuration can be defined on each.
+		 * Determines which member table properties a special member exists on so its "writable" configuration can be defined on each
 		 * @param {member} [Object] : The special member
 		 * @param {memberTable} [Object] : The module's categorized members
-		 * @returns {targets} [Array<Object>] : References to the member category objects
+		 * @returns {targets} [Array<Object>] : The member table properties this member exists on
 		 */
 		getWritableTargets: function (member, memberTable) {
 			var targets = [memberTable.class];
@@ -1023,13 +1036,16 @@
 			var specialMembers = Members.spliceSpecialMembers(members);
 
 			Members.attachSpecialMembers(specialMembers, memberTable, constructor);
+
 			A.extend(memberTable.class, members.public, members.private, members.protected);
 			A.extend(memberTable.public, members.public);
-			A.saveKeys(memberTable.public, memberTable.publicNames);
+
+			memberTable.publicNames = A.getKeyNames(memberTable.public);
 
 			if (Core.inSuperMode) {
 				A.extend(memberTable.protected, members.protected);
-				A.saveKeys(memberTable.protected, memberTable.protectedNames);
+
+				memberTable.protectedNames = A.getKeyNames(memberTable.protected);
 			}
 
 			return memberTable;
@@ -1045,6 +1061,7 @@
 		 */
 		purge: function (instance, key) {
 			A.setWritable(instance, key, true);
+
 			delete instance[key];
 
 			if (!!instance.proxy && instance.proxy.hasOwnProperty(key)) {
@@ -2060,7 +2077,7 @@
 	 */
 	function include (module) {
 		if (A.isFilePath(module)) {
-			Imports.import(module);
+			Imports.getScript(module);
 			return;
 		}
 
@@ -2079,18 +2096,18 @@
 	 * @returns [Function OR Object]
 	 */
 	function get (module) {
-		return Imports.get(module);
+		return Imports.getModule(module);
 	}
 
 	/**
-	 * ### - Library method: define()
+	 * ### - Library method: module()
 	 *
 	 * Defines a free function or object module by name
 	 * @param {module} [String] : The module name
 	 * @param {definition} [Function OR Object] : The module definition
 	 * @throws [MultiDefinitionException]
 	 */
-	function define (module, definition) {
+	function module (module, definition) {
 		if (A.isFunction(definition)) {
 			Modules.buildFreeFunction(module, definition);
 		} else if (A.isObject(definition)) {
@@ -2107,6 +2124,8 @@
 	function main (callback) {
 		if (!Core.started) {
 			Core.main = A.func(callback);
+
+			Imports.queueCheckRemaining();
 		}
 	}
 
@@ -2172,7 +2191,7 @@
 		Abstract: Abstract,
 		Final: Final,
 		Interface: Interface,
-		define: define
+		module: module
 	};
 
 	// Export library utilities to the global scope

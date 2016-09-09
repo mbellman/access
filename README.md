@@ -4,10 +4,12 @@
 [Introduction](#introduction)  
 [Documentation](#documentation)  
 [Examples](#examples)  
-[Example: Index page](#index-page)  
-[Example: Single-class application](#single-class-application)  
-[Example: Multi-class application with inheritance](#multi-class-application-with-inheritance)  
-[Example: Interfaces](#interfaces)  
+[> Index page](#index-page)  
+[> Single-class application](#single-class-application)  
+[> Multi-class application with inheritance](#multi-class-application-with-inheritance)  
+[> Interfaces](#interfaces)  
+[> Free Modules](#free-modules)  
+[> Namespaces](#namespaces)  
 [Motivation](#motivation)
 
 ## Introduction
@@ -29,11 +31,13 @@ This library provides an ECMAScript 5.1 implementation of certain features one w
 
 # Examples
 
+Please refer to the [documentation](#documentation) for specifics on library methods and behavior.
+
 ---
 
 ## Index page
 
-Here's the default setup for your index page.
+This is the basic index page structure you need to run your program.
 
 `index.html`
 ```html
@@ -53,13 +57,7 @@ Here's the default setup for your index page.
 
 ## Single-class application
 
-```
-       main.js
-          |
-  core/Application.js
-```
-
-A basic program with a single class called **Application**.
+Here is a basic program with a single class called **Application**.
 
 `main.js`
 ```javascript
@@ -94,16 +92,6 @@ Class('Application')(function(public){
 ## Multi-class application with inheritance
 
 Programs can be composed of multiple classes, some of which may extend others.
-
-```
-                main.js
-                   |
-          --------------------
-          |                   |
-  js/Application.js      js/Person.js
-                              |
-                         js/Human.js
-```
 
 `main.js`
 ```javascript
@@ -189,7 +177,7 @@ Class('Human')(function(public, private, protected){
 
 ## Interfaces
 
-Interfaces here function in a slightly more limited fashion than their counterparts in true object-oriented languages like Java or C#. They cannot be directly referenced, nor can their members. Defining an interface merely defines a list of either **variables** or **methods** which all implementing classes are required to incorporate publicly. Interface variables are denoted by **null** values and methods by **empty functions**. Interfaces only serve as a means of safeguarding implementing classes against omitting the interface members. They are purely a formality to be used at the discretion of the programmer. With that out of the way...
+Interfaces function in a slightly more limited fashion than their counterparts in true object-oriented languages like Java or C#. They cannot be directly referenced, nor can their members. Defining an interface merely defines a list of either **variables** or **methods** which all implementing classes are required to incorporate publicly. Interface variables are denoted by **null** values and methods by **empty functions**. Interfaces only serve as a means of safeguarding implementing classes against omitting the interface members. They are purely a formality to be used at the discretion of the programmer. With that out of the way...
 
 `IAnimal.js`
 ```javascript
@@ -254,6 +242,110 @@ Class('Bird').implements('IAnimal')(function(public){
 
 	public.talk = function () {
 		console.log("Chirp!");
+	};
+});
+```
+
+---
+
+## Free Modules
+
+It is also possible to `define` free functions and objects which can be imported in other files using `get()`.
+
+`main.js`
+```javascript
+(function(){
+	include('modules.js');
+
+	var sayHello = get('sayHello');
+	var sayGoodbye = get('sayGoodbye');
+	var Data = get('Data');
+
+	main(function(){
+		sayHello();
+		sayGoodbye();
+
+		console.log(Data.property);   // "123"
+	});
+})();
+```
+
+---
+
+`modules.js`
+```javascript
+(function(){
+	module('sayHello', function () {
+		console.log("Hello!");
+	});
+
+	module('sayGoodbye', function () {
+		console.log("Goodbye!");
+	});
+
+	module('Data', {
+		property: "123"
+	});
+})();
+```
+
+---
+
+## Namespaces
+
+Classes and free modules can be grouped into **namespaces** for categorization or easy access.
+
+`main.js`
+```javascript
+(function(){
+	root('js');
+
+	include('mathutils.js');
+	include('Vector3.js');
+
+	var MathUtils = use.namespace('MathUtils');
+
+	main(function(){
+		console.log(MathUtils.square(5));   // 25
+		console.log(MathUtils.cube(5));     // 125
+
+		var vec3 = new MathUtils.Vector3(0, 1, -1);
+
+		console.log(vec3.x, vec3.y, vec3.z);   // 0 1 -1
+	});
+})();
+```
+
+---
+
+`mathutils.js`
+```javascript
+namespace('MathUtils');
+
+module('square', function (n) {
+	return n * n;
+});
+
+module('cube', function (n) {
+	return n * n * n;
+});
+```
+
+---
+
+`Vector3.js`
+```javascript
+namespace('MathUtils');
+
+Class('Vector3')(function(public){
+	public.x = 0;
+	public.y = 0;
+	public.z = 0;
+
+	public.new = function (x, y, z) {
+		this.x = x;
+		this.y = y;
+		this.z = z;
 	};
 });
 ```
