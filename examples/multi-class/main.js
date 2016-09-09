@@ -1,5 +1,5 @@
 (function(){
-	// Set root folder for include() calls
+	// Set root folder path for include() calls
 	root('js');
 
 	var Application = include('Application').from('Application.js');

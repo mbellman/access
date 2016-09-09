@@ -2,13 +2,15 @@
 
 ## Index
 [Introduction](#introduction)  
+[Documentation](#documentation)  
 [Examples](#examples)  
-[Index page](#index-page)  
-[Single-class application](#single-class-application)  
-[Multi-class application with inheritance](#multi-class-application-with-inheritance)  
-[Interfaces](#interfaces)  
+* [Index page](#index-page)  
+* [Single-class application](#single-class-application)  
+* [Multi-class application with inheritance](#multi-class-application-with-inheritance)  
+* [Interfaces](#interfaces)  
+[Motivation](#motivation)
 
-### Introduction
+## Introduction
 Have you ever:
 * Bemoaned the lack of traditional class definitions or classical object-oriented constructs in pre-ES6 JavaScript?
 * Lamented JavaScript's omission of public, private, or protected member definitions?
@@ -22,7 +24,11 @@ Have you ever:
 
 This library provides an ECMAScript 5.1 implementation of certain features one would expect of any classical object-oriented language. Since JavaScript prior to ES6/ES2015/Harmony had no formal concept of classes, and since specification-compliant ES6 omits any explicit declaration of **public**, **private**, **protected**, **final**, or **static** members, **Interfaces**, **Abstract** or **Final** classes, and **namespaces**, the tools included therein provide some means of remedying these problems (if you view them as such).
 
+## Documentation
+[See: /docs](../blob/master/docs)
+
 # Examples
+
 
 ## Index page
 
@@ -39,6 +45,7 @@ This library provides an ECMAScript 5.1 implementation of certain features one w
 	</body>
 </html>
 ```
+
 
 ## Single-class application
 
@@ -72,12 +79,13 @@ Class('Application')(function(public){
 });
 ```
 
+
 ## Multi-class application with inheritance
 
 `main.js`
 ```javascript
 (function(){
-	// Set root folder for include() calls
+	// Set root folder path for include() calls
 	root('js');
 
 	var Application = include('Application').from('Application.js');
@@ -137,6 +145,8 @@ Class('Person').extends('Human')(function(public, private){
 });
 ```
 
+---
+
 `js/Human.js`
 ```javascript
 Class('Human')(function(public, private, protected){
@@ -147,3 +157,79 @@ Class('Human')(function(public, private, protected){
 	};
 });
 ```
+
+
+## Interfaces
+
+Interfaces here function in a slightly more limited fashion than their counterparts in true object-oriented languages like Java or C#. They cannot be directly referenced, nor can their members. Defining an interface merely defines a list of either **variables** or **methods** which all implementing classes are required to incorporate publicly. Variables are denoted by **null** values and methods by **empty functions**. Interfaces only serve as a means of safeguarding implementing classes against omitting the interface members. They are purely a formality to be used at the discretion of the programmer. With that out of the way...
+
+`IAnimal.js`
+```javascript
+Interface('IAnimal')({
+	ecosystem: null,
+
+	eat: function () {},
+	talk: function () {}
+});
+```
+
+---
+
+`Cow.js`
+```javascript
+include('IAnimal.js');
+
+Class('Cow').implements('IAnimal')(function(public){
+	public.ecosystem = "Grassland";
+
+	public.eat = function () {
+		console.log("Cows eat grass.");
+	};
+
+	public.talk = function () {
+		console.log("Moo!");
+	};
+});
+```
+
+---
+
+`Fish.js`
+```javascript
+include('IAnimal.js');
+
+Class('Fish').implements('IAnimal')(function(public){
+	public.ecosystem = "Ocean";
+
+	public.eat = function () {
+		console.log("Fish eat aquatic organisms.");
+	};
+
+	public.talk = function () {
+		console.log("Glub glub!");
+	};
+});
+```
+
+---
+
+`Bird.js`
+```javascript
+include('IAnimal.js');
+
+Class('Bird').implements('IAnimal')(function(public){
+	public.ecosystem = "Highland";
+
+	public.eat = function () {
+		console.log("Birds eat worms.");
+	};
+
+	public.talk = function () {
+		console.log("Chirp!");
+	};
+});
+```
+
+
+# Motivation
+[...](http://gunshowcomic.com/comics/20120227-robotthatscreams.png)
