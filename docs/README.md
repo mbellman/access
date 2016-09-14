@@ -1,11 +1,13 @@
 # Access : Documentation
 
----
+[Global Methods](#i-global-methods)  
+[> Class](#class)  
+[Internals](#ii-internals)  
+[> definer](#definer)  
+[> extends](#extends)
 
-## Global Methods
+## I. Global Methods
 All global methods are deleted from `window` immediately prior to class generation.
-
----
 
 # Class()
 **Class()** is used to create class definitions.
@@ -42,10 +44,8 @@ Class('ClassB')(function(public, private){
 
 ---
 
-## Internals
+## II. Internals
 The following includes patterns and utilities that aren't available as explicit API methods, but are instead constructs used in the library's design.
-
----
 
 # definer
 A **definer** function is returned by invoking [Class()](#class) and is used to extend base classes, implement an interface, and define class members via its returned [builder](#builder) function.
