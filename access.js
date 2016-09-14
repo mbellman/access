@@ -1060,11 +1060,15 @@
 		 * @param {key} [String] : The name of the member to remove
 		 */
 		purge: function (instance, key) {
+			if (!A.has(instance, key)) {
+				return;
+			}
+
 			A.setWritable(instance, key, true);
 
 			delete instance[key];
 
-			if (!!instance.proxy && instance.proxy.hasOwnProperty(key)) {
+			if (A.has(instance, 'proxy') && A.has(instance.proxy, key)) {
 				delete instance.proxy[key];
 			}
 		},
@@ -1079,17 +1083,23 @@
 		 * the derived class member table - after this we bind inherited members using "forceRevert" set to true to catch and revert final
 		 * inherited members. Member deletion is first necessary to remove any illegally bound access-modified derivations of final base members.
 		 * @param {keys} [Array<String>] : A list of key names for the members to be cloned and bound
-		 * @param {proxy} [Object] : A partial alias object on which to bind properties pointing to the equivalent base instance properties
+		 * @param {proxy} [Object] : A public alias object on which to bind properties pointing to the equivalent base instance properties
 		 * @param {base} [Object] : The base instance object
 		 * @param {forceRevert} [Boolean] : Forces overriding of derived class instance members if a base class instance member is final
 		 */
 		bind: function (keys, proxy, base, forceRevert) {
 			var baseProto = Object.getPrototypeOf(base);
+			var topInstance = base.__topInstance__ || {};
 
 			A.eachInArray(keys, function(key){
+				var isFinal = false;
+
 				if (!A.isUndefined(proxy[key])) {
 					if (forceRevert && !A.isWritable(baseProto, key)) {
 						Members.purge(proxy, key);
+						Members.purge(topInstance, key);
+
+						isFinal = true;
 					} else {
 						return;
 					}
@@ -1106,6 +1116,12 @@
 						break;
 					default:
 						A.bindReference(key, proxy, base);
+				}
+
+				if (isFinal) {
+					// TODO: Refactor/clean up this ancestor class final member business
+					A.bindReference(key, topInstance, base);
+					A.bindReference(key, topInstance.proxy, topInstance);
 				}
 			});
 		}
@@ -1722,6 +1738,7 @@
 			function SuperConstructor (derivedInstance, args) {
 				var superInstance = Object.create(memberTable.class);
 				superInstance.proxy = {};
+				superInstance.__topInstance__ = (derivedInstance.__topInstance__ || derivedInstance);
 
 				Members.bind(publicNames, superInstance.proxy, superInstance);
 				Members.bind(protectedNames, superInstance.proxy, superInstance);
@@ -1732,6 +1749,11 @@
 
 				Modules.initialize(module, superInstance, deepSupers, args);
 				Modules.inherit(superInstance, deepSupers);
+
+				// TODO: Use a cleaner method of setting/deleting these properties
+				delete superInstance.__topInstance__;
+				delete derivedInstance.__topInstance__;
+				delete derivedInstance.__superArgs__;
 
 				return superInstance.proxy;
 			}

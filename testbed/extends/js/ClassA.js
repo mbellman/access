@@ -2,6 +2,7 @@ Class('ClassA')(function(public, protected, private){
 	private.aPrivate = "Class A secret message";
 	protected.aProtected = "Class A protected message";
 	public.aPublic = "Class A public message";
+	public.final.aFinal = "Class A final message";
 
 	public.new = function (message) {
 		console.log(message);

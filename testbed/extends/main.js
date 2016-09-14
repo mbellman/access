@@ -16,6 +16,14 @@
 					assert(that(classB.aPublicMethod).is.a.function);
 				});
 			});
+
+			describe('Level-two inheritance', function () {
+				it('Should ensure that final members of base classes are not overriden by any descendant classes', function () {
+					var classC = new ClassC();
+
+					assert(that(classC.aFinal).equals("Class A final message"));
+				});
+			});
 		});
 	});
 })();

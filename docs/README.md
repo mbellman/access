@@ -61,7 +61,7 @@ A class **definer** function is used to extend base classes, implement an interf
 No return value
 
 ### Description
-The **definer** function accepts a single [builder](#builder) function parameter to defines the class members. The definer is also equipped with two chainable method properties, [extends](#extends) and [implements](#implements), which allow it to specify base classes or an interface, respectively.
+The **definer** function accepts a single [builder](#builder) function parameter to define the class members. The definer is also equipped with two chainable method properties, [extends](#extends) and [implements](#implements), which allow it to specify base classes to inherit or an interface to implement, respectively.
 
 ### Example
 See [Class > Example](#example) for an example of a class definer taking in a [builder](#builder) function. Seeing as `Class()` returns a definer for immediate use, we can simply invoke it using the form `Class('MyClass')(...)`.
@@ -77,7 +77,7 @@ Class('MyClass').extends(baseClasses)(function(public){
 ```
 
 ### Arguments
-`baseClasses` (String) : One or multiple comma-separated base class names for a class to extend
+`baseClasses` (String) : One or multiple comma-separated base class names for a class to inherit
 
 ### Returns
 `definer` (Function) : The [definer](#definer) function for chaining
@@ -86,12 +86,12 @@ Class('MyClass').extends(baseClasses)(function(public){
 **extends** provides a mechanism for class inheritance in a manner more characteristic of classical object-oriented programming, rather than the popular practice of extending a JavaScript object or a constructor function prototype with additional properties. The rules are as follows:
 
 1. Public members of a directly-extended base class **are** accessible on instances of the derived class and inside its methods via `this`.
-2. Protected members of a directly-extended base class **are** accessible inside methods of the derived class via `this`.
+2. Protected members of a directly-extended base class **are not** accessible on instances of the derived class, but **are** accessible inside methods of the derived class via `this`.
 3. Private members of a directly-extended base class **are not** accessible to either instances or methods of the derived class, though they do exist in memory.
-4. Public and protected members of a directly-extended base class **are** accessible inside methods of the derived class via `this.super` (single-extension) or `this.super.{superclassName}` (multi-extension).
-5. Public static members of a directly-extended base class **are** accessible on a derived class constructor as well as on its instances/inside its methods via `this`. Changing the member value will propagate to the base class and its instances if applicable.
-6. Public members of a non-direct ancestor class **are not** accessible on instances or inside methods of the derived class via `this`.
-7. Public members of a grandparent class **are** accessible inside instances of the derived class via `this.super` (single-extension) or `this.super.{superclassName}` (multiple-extension).
+4. Public static members of a directly-extended base class **are** accessible on a derived class constructor as well as on its instances and inside its methods via `this`. Changing the member value will propagate to the base class and its instances if applicable.
+5. Public members of a non-direct ancestor class **are not** accessible on instances or inside methods of the derived class via `this`.
+6. Public and protected members of a grandparent class **are** accessible inside methods of the derived class via `this.super` (single-extension) or `this.super.{superclassName}` (multiple-extension).
+7. Final members cannot be overriden by derived classes - they will simply retain their final value.
 
 ### Example
 ```javascript
