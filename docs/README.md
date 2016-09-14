@@ -25,7 +25,7 @@ All global methods are deleted from `window` immediately prior to class generati
 This method creates an internal store of a class if one does not already exist under its name. It returns a [definer](#definer) function, which in turn can intake the class [builder](#builder) function or set the class extensions/implementation. A class [builder](#builder) function is used to define the class members, and gets executed only once per class just before application runtime.
 
 ### Example
-The following delegates a class `ClassA` to be defined just before application runtime, defining its various `public` and `private` members in a [builder](#builder) function.
+In principle, the following defines a class `ClassA`. In practice, it delegates the class to be generated internally just before application runtime, preparing its various `public` and `private` members to be defined upon execution of the class [builder](#builder) function. Prior to class generation, the class cannot be instantiated.
 
 ```javascript
 Class('ClassA')(function(public, private){
@@ -66,7 +66,7 @@ The **definer** function accepts a single [builder](#builder) function parameter
 See [Class > Example](#example) for an example of a class definer taking in a [builder](#builder) function. Seeing as `Class()` returns a definer for immediate use, we can simply invoke it using the form `Class('MyClass')(...)`.
 
 # extends
-The **extends** property of the [definer](#definer) function allows us to specify any number of base classes for a derived class to inherit from.
+The **extends** property of a [definer](#definer) function allows us to specify any number of base classes for a derived class to inherit from.
 
 ### Usage
 ```javascript
@@ -76,7 +76,7 @@ Class('MyClass').extends(baseClasses)(function(public){
 ```
 
 ### Arguments
-`baseClasses` (String) : A string of one or multiple comma-separated base class names for a class to extend
+`baseClasses` (String) : One or multiple comma-separated base class names for a class to extend
 
 ### Returns
 `definer` (Function) : The [definer](#definer) function for chaining
@@ -92,7 +92,7 @@ Class('MyClass').extends(baseClasses)(function(public){
 6. Public members of a non-direct ancestor class **are not** accessible on instances or inside methods of the derived class via `this`.
 7. Public members of a grandparent class **are** accessible inside instances of the derived class via `this.super` (single-extension) or `this.super.{superclassName}` (multiple-extension).
 
-### Examples
+### Example
 ```javascript
 Class('ClassA')(function(public, private, protected){
 	public.value = 15;
@@ -131,6 +131,41 @@ Class('ClassB').extends('ClassA')(function(public){
 	// Returns the inherited protected member
 	public.getOtherMessage = function () {
 		return this.otherMessage;
+	};
+});
+```
+
+# implements
+The **implements** property of a [definer](#definer) function allows us to specify an [interface](#interface) for a class to implement.
+
+### Usage
+```javascript
+Class('MyClass').implements(interfaceName)(function(public){
+	// ...
+});
+```
+
+### Arguments
+`interfaceName` (String) : The name of the interface
+
+### Returns
+`definer` (Function) : The [definer](#definer) function for chaining
+
+### Description
+**implements** provides a mechanism for a class to implement an [interface](#interface). However, unlike with traditional interface implementation, neither the interface itself nor its properties can be directly imported or accessed. Interfaces here only establish a "contract" which implementing classes must follow by overriding all variables and methods of the interface and making them **public** members. Functionality-wise, they have no real "use" but to enforce adoption of these members.
+
+### Example
+```javascript
+Interface('IClassInterface')({
+	value: null,
+	method: function () {}
+});
+
+Class('ClassA').implements('IClassInterface')(function(public){
+	public.value = 25;
+
+	public.method = function () {
+		console.log("Interface method implementation!");
 	};
 });
 ```
