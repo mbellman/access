@@ -4,7 +4,8 @@
 [> Class](#class)  
 [Internals](#ii-internals)  
 [> definer](#definer)  
-[> extends](#extends)
+[> extends](#extends)  
+[> implements](#implements)  
 
 ## I. Global Methods
 All global methods are deleted from `window` immediately prior to class generation.
