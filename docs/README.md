@@ -1,11 +1,13 @@
 # Access : Documentation
 
-# Global Methods
+---
+
+## Global Methods
 All global methods are deleted from `window` immediately prior to class generation.
 
 ---
 
-# Class
+# Class()
 **Class()** is used to create class definitions.
 
 ### Usage
@@ -40,13 +42,13 @@ Class('ClassB')(function(public, private){
 
 ---
 
-# Internals
-The following includes patterns and utilities that aren't available as methods to be called, but are instead constructs used in the library's design.
+## Internals
+The following includes patterns and utilities that aren't available as explicit API methods, but are instead constructs used in the library's design.
 
 ---
 
 # definer
-A **definer** function is returned by invoking [Class()](#class).
+A **definer** function is returned by invoking [Class()](#class) and is used to extend base classes, implement an interface, and define class members via its returned [builder](#builder) function.
 
 ### Usage
 `Class('MyClass')(builder);`
@@ -61,9 +63,9 @@ No return value
 The **definer** function accepts one parameter, the class [builder](#builder) function, which defines the class members. The definer is also equipped with two properties, [extends](#extends) and [implements](#implements), which allow it to specify for a class multiple base classes or a single interface, respectively.
 
 ### Example
-See [Class](#class) > Example
+See [Class > Example](#example)
 
-## extends
+# extends
 The **extends** property of the [definer](#definer) function allows one to specify any number of base classes for a derived class to inherit from.
 
 ### Usage
