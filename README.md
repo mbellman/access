@@ -274,19 +274,17 @@ It is also possible to define free functions and objects which can be imported i
 
 `modules.js`
 ```javascript
-(function(){
-	module('sayHello', function () {
-		console.log("Hello!");
-	});
+module('sayHello', function () {
+	console.log("Hello!");
+});
 
-	module('sayGoodbye', function () {
-		console.log("Goodbye!");
-	});
+module('sayGoodbye', function () {
+	console.log("Goodbye!");
+});
 
-	module('Data', {
-		property: "123"
-	});
-})();
+module('Data', {
+	property: "123"
+});
 ```
 
 ---
