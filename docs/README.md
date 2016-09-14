@@ -3,7 +3,9 @@
 # Global Methods
 All global methods are deleted from `window` immediately prior to class generation.
 
-## Class
+---
+
+# Class
 **Class()** is used to create class definitions.
 
 ### Usage
@@ -34,13 +36,16 @@ Class('ClassB')(function(public, private){
 		return this.secretNumber;
 	};
 });
+```
 
 ---
 
 # Internals
 The following includes patterns and utilities that aren't available as methods to be called, but are instead constructs used in the library's design.
 
-## definer
+---
+
+# definer
 A **definer** function is returned by invoking [Class()](#class).
 
 ### Usage
