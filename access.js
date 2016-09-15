@@ -1071,59 +1071,6 @@
 			if (A.has(instance, 'proxy') && A.has(instance.proxy, key)) {
 				delete instance.proxy[key];
 			}
-		},
-
-		/**
-		 * ## - Members.bind()
-		 *
-		 * Clones and binds the members listed in a "keys" array from a base instance object onto a proxy object. The first use for this
-		 * scheme is the creation and binding of public-facing class members to the internal instance for context preservation. The second use
-		 * is for inheritance of base class public and protected members onto a derived class instance, which occurs after the former case.
-		 * The cause for reverse inheritance is that it is quickest to construct the initial derived instance with Object.create() using
-		 * the derived class member table - after this we bind inherited members using "forceRevert" set to true to catch and revert final
-		 * inherited members. Member deletion is first necessary to remove any illegally bound access-modified derivations of final base members.
-		 * @param {keys} [Array<String>] : A list of key names for the members to be cloned and bound
-		 * @param {proxy} [Object] : A public alias object on which to bind properties pointing to the equivalent base instance properties
-		 * @param {base} [Object] : The base instance object
-		 * @param {forceRevert} [Boolean] : Forces overriding of derived class instance members if a base class instance member is final
-		 */
-		bind: function (keys, proxy, base, forceRevert) {
-			var baseProto = Object.getPrototypeOf(base);
-			var topInstance = base.__topInstance__ || {};
-
-			A.eachInArray(keys, function(key){
-				var isFinal = false;
-
-				if (!A.isUndefined(proxy[key])) {
-					if (forceRevert && !A.isWritable(baseProto, key)) {
-						Members.purge(proxy, key);
-						Members.purge(topInstance, key);
-
-						isFinal = true;
-					} else {
-						return;
-					}
-				}
-
-				var member = base[key];
-
-				switch (A.typeOf(member)) {
-					case 'function':
-						proxy[key] = A.bind(member, base);
-						break;
-					case 'object':
-						proxy[key] = member;
-						break;
-					default:
-						A.bindReference(key, proxy, base);
-				}
-
-				if (isFinal) {
-					// TODO: Refactor/clean up this ancestor class final member business
-					A.bindReference(key, topInstance, base);
-					A.bindReference(key, topInstance.proxy, topInstance);
-				}
-			});
 		}
 	};
 
@@ -1207,85 +1154,6 @@
 					if (eventQueue.hasOwnProperty(module)) {
 						A.each(eventQueue[module], function(handler){
 							handler.apply(null, args);
-						});
-					}
-				}
-			}
-		},
-
-		// [Function] : Class instance-binding methods
-		bindMethod: {
-			/**
-			 * ## - Modules.bindMethod.new()
-			 *
-			 * Binds a special new() constructor method to a new class instance only if one has not already been set
-			 * @param {instance} [Object] : The class instance
-			 */
-			new: function (instance) {
-				instance.new = A.func(instance.new);
-			},
-
-			/**
-			 * ## - Modules.bindMethod.is()
-			 *
-			 * Binds a special is() type check method to a new class instance. Type checking will search upward through the superclass
-			 * tree, if applicable, to ensure that a derived class also resolves as being of a superclass type.
-			 * @param {instance} [Object] : The class instance
-			 * @param {module} [String] : The name of the instance's class
-			 */
-			is: function (instance, module) {
-				/**
-				 * @param {type} [String] : The class name to check against
-				 */
-				instance.proxy.is = instance.is = function (type) {
-					if (type === module) {
-						return true;
-					}
-
-					if (A.has(instance, 'super')) {
-						if (A.has(instance.super, 'proxy')) {
-							return instance.super.is(type);
-						} else {
-							var isSuperOfType = false;
-
-							A.eachInObject(instance.super, function(superName){
-								if (instance.super[superName].is(type)) {
-									return !(isSuperOfType = true);
-								}
-							});
-
-							return isSuperOfType;
-						}
-					}
-
-					return false;
-				};
-			},
-
-			/**
-			 * ## - Modules.bindMethod.super()
-			 *
-			 * Binds a special super() method to a class instance which will be replaced by the actual superclass instance after
-			 * instance initialization via new(). Prior to initialization, super() or super.{superClass}() will serve as a means
-			 * of specifying arguments to be passed into superclass constructors.
-			 * @param {instance} [Object] : The class instance
-			 * @param {supers} [Array<String>] : A list of superclasses by name
-			 */
-			super: function (instance, supers) {
-				instance.__superArgs__ = {};
-
-				if (supers.length > 0) {
-					if (supers.length === 1) {
-						instance.super = function () {
-							instance.__superArgs__ = arguments;
-						};
-					} else {
-						instance.super = {};
-
-						A.eachInArray(supers, function(superclass){
-							instance.super[superclass] = function () {
-								instance.__superArgs__[superclass] = arguments;
-							};
 						});
 					}
 				}
@@ -1480,51 +1348,6 @@
 		},
 
 		/**
-		 * ## - Modules.initialize()
-		 *
-		 * Creates a proxy property on a class instance to be returned by the constructor, binds special methods to the instance,
-		 * and calls the special new() initializer once before promptly removing it. The special super() argument handler is
-		 * replaced in Modules.inherit(), which runs after initalize().
-		 * @param {module} [String] : The class name
-		 * @param {instance} [Object] : The class instance
-		 * @param {supers} [Array<String>] : A list of superclasses by name
-		 * @param {args} [Arguments] : Arguments for the initializer
-		 */
-		initialize: function (module, instance, supers, args) {
-			instance.proxy = instance.proxy || {};
-
-			Modules.bindMethod.new(instance);
-			Modules.bindMethod.super(instance, supers);
-			Modules.bindMethod.is(instance, module);
-
-			instance.new.apply(instance, args);
-
-			instance.new = null;
-			instance.proxy.new = null;
-		},
-
-		/**
-		 * ## - Modules.inherit()
-		 *
-		 * Instantiates and binds superclasses to a derived class or derived superclass instance
-		 * @param {instance} [Object] : The derived class instance
-		 * @param {supers} [Array<String>] : A list of superclasses by name
-		 */
-		inherit: function (instance, supers) {
-			if (supers.length > 0) {
-				if (supers.length === 1) {
-					instance.S = instance.super = Supers.construct(supers[0], instance);
-				} else {
-					instance.S = instance.super = {};
-
-					A.eachInArray(supers, function(name){
-						instance.S[name] = instance.super[name] = Supers.construct(name, instance);
-					});
-				}
-			}
-		},
-
-		/**
 		 * ## - Modules.buildInterface()
 		 *
 		 * Stores an interface definition object to a special internal list. Any implementing classes will have their defined
@@ -1648,12 +1471,12 @@
 					return null;
 				}
 
-				var instance = Object.create(MemberTable.class);
-				instance.proxy = {};
+				var instance = Instances.createFrom(MemberTable);
 
-				Members.bind(MemberTable.publicNames, instance.proxy, instance);
-				Modules.initialize(module, instance, supers, arguments);
-				Modules.inherit(instance, supers);
+				Instances.bind(instance.proxy, instance, MemberTable.publicNames);
+
+				Instances.initialize(module, instance, supers, arguments);
+				Instances.inherit(instance, supers);
 
 				return instance.proxy;
 			}
@@ -1736,19 +1559,17 @@
 			 * @param {args} [Arguments] : Arguments for the initializer
 			 */
 			function SuperConstructor (derivedInstance, args) {
-				var superInstance = Object.create(memberTable.class);
-				superInstance.proxy = {};
-				superInstance.__topInstance__ = (derivedInstance.__topInstance__ || derivedInstance);
+				var superInstance = Instances.createSuperFrom(memberTable, derivedInstance);
 
-				Members.bind(publicNames, superInstance.proxy, superInstance);
-				Members.bind(protectedNames, superInstance.proxy, superInstance);
+				Instances.bind(superInstance.proxy, superInstance, publicNames);
+				Instances.bind(superInstance.proxy, superInstance, protectedNames);
 
-				Members.bind(publicNames, derivedInstance, superInstance, true);
-				Members.bind(publicNames, derivedInstance.proxy, superInstance, true);
-				Members.bind(protectedNames, derivedInstance, superInstance, true);
+				Instances.bind(derivedInstance, superInstance, publicNames, true);
+				Instances.bind(derivedInstance.proxy, superInstance, publicNames, true);
+				Instances.bind(derivedInstance, superInstance, protectedNames, true);
 
-				Modules.initialize(module, superInstance, deepSupers, args);
-				Modules.inherit(superInstance, deepSupers);
+				Instances.initialize(module, superInstance, deepSupers, args);
+				Instances.inherit(superInstance, deepSupers);
 
 				// TODO: Use a cleaner method of setting/deleting these properties
 				delete superInstance.__topInstance__;
@@ -1760,6 +1581,26 @@
 
 			Supers.constructors[module] = SuperConstructor;
 			Supers.memberTables[module] = memberTable;
+		},
+
+		/**
+		 * ## - Supers.getPublicStaticMembers()
+		 *
+		 * Returns the names of all public static members from a superclass member table
+		 * @param {memberTable} [String] : The superclass member table
+		 * @returns [Array<String>]
+		 */
+		getPublicStaticMembers: function (memberTable) {
+			var publicNames = memberTable.publicNames;
+			var publicStaticMembers = [];
+
+			A.eachInArray(publicNames, function(name){
+				if (A.has(memberTable.static, name)) {
+					publicStaticMembers.push(name);
+				}
+			});
+
+			return publicStaticMembers;
 		},
 
 		/**
@@ -1776,16 +1617,9 @@
 				}
 
 				var memberTable = Supers.memberTables[superclass];
-				var publicNames = memberTable.publicNames;
-				var publicStaticMembers = [];
+				var publicStaticMembers = Supers.getPublicStaticMembers(memberTable);
 
-				A.eachInArray(publicNames, function(name){
-					if (memberTable.static.hasOwnProperty(name)) {
-						publicStaticMembers.push(name);
-					}
-				});
-
-				Members.bind(publicStaticMembers, constructor, memberTable.static);
+				Instances.bind(constructor, memberTable.static, publicStaticMembers);
 			});
 		},
 
@@ -1805,6 +1639,215 @@
 			}
 
 			return null;
+		}
+	};
+
+	/**
+	 * Instance creation utilities
+	 */
+	var Instances = {
+		// [Object{Function}] : Special method binders for instances
+		bindMethod: {
+			/**
+			 * ## - Instances.bindMethod.new()
+			 *
+			 * Binds a special new() constructor method to a class instance only if one has not already been set
+			 * @param {instance} [Object] : The class instance
+			 */
+			new: function (instance) {
+				instance.new = A.func(instance.new);
+			},
+
+			/**
+			 * ## - Instances.bindMethod.is()
+			 *
+			 * Binds a special is() type check method to a new class instance. Type checking will search upward through the superclass
+			 * tree, if applicable, to ensure that a derived class also resolves as being of a superclass type.
+			 * @param {instance} [Object] : The class instance
+			 * @param {module} [String] : The name of the instance's class
+			 */
+			is: function (instance, module) {
+				/**
+				 * @param {type} [String] : The class name to check against
+				 */
+				instance.proxy.is = instance.is = function (type) {
+					if (type === module) {
+						return true;
+					}
+
+					if (A.has(instance, 'super')) {
+						if (A.has(instance.super, 'proxy')) {
+							return instance.super.is(type);
+						} else {
+							var isSuperOfType = false;
+
+							A.eachInObject(instance.super, function(superName){
+								if (instance.super[superName].is(type)) {
+									return !(isSuperOfType = true);
+								}
+							});
+
+							return isSuperOfType;
+						}
+					}
+
+					return false;
+				};
+			},
+
+			/**
+			 * ## - Instances.bindMethod.super()
+			 *
+			 * Binds a special super() method to a class instance which will be replaced by the actual superclass instance after
+			 * instance initialization via new(). Prior to initialization, super() or super.{superClass}() will serve as a means
+			 * of specifying arguments to be passed into superclass constructors.
+			 * @param {instance} [Object] : The class instance
+			 * @param {supers} [Array<String>] : A list of superclasses by name
+			 */
+			super: function (instance, supers) {
+				instance.__superArgs__ = {};
+
+				if (supers.length > 0) {
+					if (supers.length === 1) {
+						instance.super = function () {
+							instance.__superArgs__ = arguments;
+						};
+					} else {
+						instance.super = {};
+
+						A.eachInArray(supers, function(superclass){
+							instance.super[superclass] = function () {
+								instance.__superArgs__[superclass] = arguments;
+							};
+						});
+					}
+				}
+			}
+		},
+
+		/**
+		 * ## - Instances.createFrom()
+		 *
+		 * Creates and returns a normal class instance from a member table
+		 * @param {memberTable} [Object] : The class member table
+		 * @returns [Object]
+		 */
+		createFrom: function (memberTable) {
+			var instance = Object.create(memberTable.class);
+			instance.proxy = {};
+
+			return instance;
+		},
+
+		/**
+		 * ## - Instances.createSuperFrom()
+		 *
+		 * Creates and returns a base superclass instance from a member table and sets its proxy/top-level instance reference properties
+		 * @param {memberTable} [Object] : The superclass member table
+		 * @param {derivedInstance} [Object] : An already-created derived class instance
+		 * @returns [Object]
+		 */
+		createSuperFrom: function (memberTable, derivedInstance) {
+			var superInstance = Object.create(memberTable.class);
+
+			superInstance.proxy = {};
+			superInstance.__topInstance__ = (derivedInstance.__topInstance__ || derivedInstance);
+
+			return superInstance;
+		},
+
+		/**
+		 * ## - Instances.bind()
+		 *
+		 * Clones and binds the members listed in a "members" array from a base instance object onto a proxy object. The first use for this
+		 * scheme is the creation and binding of public-facing class members to the internal instance for context preservation. The second use
+		 * is for inheritance of base class public and protected members onto a derived class instance, which occurs after the former case.
+		 * The cause for reverse inheritance is that it is quickest to construct the initial derived instance with Object.create() using
+		 * the derived class member table - after this we bind inherited members using "forceRevert" set to true to catch and revert final
+		 * inherited members. Member purging is first necessary to remove any illegally bound access-modified derivations of final base members.
+		 * @param {proxy} [Object] : A public alias object on which to bind properties pointing to the equivalent base instance properties
+		 * @param {base} [Object] : The base instance object
+		 * @param {members} [Array<String>] : A list of member names to be cloned and bound
+		 * @param {forceRevert} [Boolean] : Forces overriding of derived class instance members if a base class instance member is final
+		 */
+		bind: function (proxy, base, members, forceRevert) {
+			var baseProto = Object.getPrototypeOf(base);
+			var topInstance = base.__topInstance__ || {};
+
+			A.eachInArray(members, function(name){
+				var isFinal = false;
+
+				if (!A.isUndefined(proxy[name])) {
+					if (forceRevert && !A.isWritable(baseProto, name)) {
+						Members.purge(proxy, name);
+						Members.purge(topInstance, name);
+
+						isFinal = true;
+					} else {
+						return;
+					}
+				}
+
+				var member = base[name];
+
+				switch (A.typeOf(member)) {
+					case 'function':
+						proxy[name] = A.bind(member, base);
+						break;
+					case 'object':
+						proxy[name] = member;
+						break;
+					default:
+						A.bindReference(name, proxy, base);
+				}
+
+				if (isFinal) {
+					// TODO: Refactor/clean up this ancestor class final member business
+					A.bindReference(name, topInstance, base);
+					A.bindReference(name, topInstance.proxy, topInstance);
+				}
+			});
+		},
+
+		/**
+		 * ## - Instances.initialize()
+		 *
+		 * Prepares an instance with special methods and calls its "new()" constructor method once before removal
+		 * @param {module} [String] : The class name
+		 * @param {instance} [Object] : The class instance
+		 * @param {supers} [Array<String>] : A list of superclasses by name
+		 * @param {args} [Arguments] : Arguments for the initializer
+		 */
+		initialize: function (module, instance, supers, args) {
+			Instances.bindMethod.new(instance);
+			Instances.bindMethod.super(instance, supers);
+			Instances.bindMethod.is(instance, module);
+
+			instance.new.apply(instance, args);
+
+			instance.new = null;
+			instance.proxy.new = null;
+		},
+
+		/**
+		 * ## - Instances.inherit()
+		 *
+		 * Instantiates and binds superclass instances to a derived class or derived superclass instance
+		 * @param {instance} [Object] : The derived class instance
+		 * @param {supers} [Array<String>] : A list of superclasses by name
+		 */
+		inherit: function (instance, supers) {
+			if (supers.length > 0) {
+				if (supers.length === 1) {
+					instance.S = instance.super = Supers.construct(supers[0], instance);
+				} else {
+					instance.S = instance.super = {};
+
+					A.eachInArray(supers, function(name){
+						instance.S[name] = instance.super[name] = Supers.construct(name, instance);
+					});
+				}
+			}
 		}
 	};
 
