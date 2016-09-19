@@ -1471,12 +1471,12 @@
 					return null;
 				}
 
-				var instance = Instances.createFrom(MemberTable);
+				var instance = Instances.createInstance(MemberTable);
 
 				Instances.bind(instance.proxy, instance, MemberTable.publicNames);
-
 				Instances.initialize(module, instance, supers, arguments);
 				Instances.inherit(instance, supers);
+				Instances.sanitize(instance);
 
 				return instance.proxy;
 			}
@@ -1559,7 +1559,7 @@
 			 * @param {args} [Arguments] : Arguments for the initializer
 			 */
 			function SuperConstructor (derivedInstance, args) {
-				var superInstance = Instances.createSuperFrom(memberTable, derivedInstance);
+				var superInstance = Instances.createSuperInstance(memberTable, derivedInstance);
 
 				Instances.bind(superInstance.proxy, superInstance, publicNames);
 				Instances.bind(superInstance.proxy, superInstance, protectedNames);
@@ -1570,11 +1570,7 @@
 
 				Instances.initialize(module, superInstance, deepSupers, args);
 				Instances.inherit(superInstance, deepSupers);
-
-				// TODO: Use a cleaner method of setting/deleting these properties
-				delete superInstance.__topInstance__;
-				delete derivedInstance.__topInstance__;
-				delete derivedInstance.__superArgs__;
+				Instances.sanitizeAll(superInstance, derivedInstance);
 
 				return superInstance.proxy;
 			}
@@ -1726,34 +1722,61 @@
 		},
 
 		/**
-		 * ## - Instances.createFrom()
+		 * ## - Instances.createInstance()
 		 *
 		 * Creates and returns a normal class instance from a member table
 		 * @param {memberTable} [Object] : The class member table
 		 * @returns [Object]
 		 */
-		createFrom: function (memberTable) {
+		createInstance: function (memberTable) {
 			var instance = Object.create(memberTable.class);
+
 			instance.proxy = {};
 
 			return instance;
 		},
 
 		/**
-		 * ## - Instances.createSuperFrom()
+		 * ## - Instances.createSuperInstance()
 		 *
 		 * Creates and returns a base superclass instance from a member table and sets its proxy/top-level instance reference properties
 		 * @param {memberTable} [Object] : The superclass member table
 		 * @param {derivedInstance} [Object] : An already-created derived class instance
 		 * @returns [Object]
 		 */
-		createSuperFrom: function (memberTable, derivedInstance) {
+		createSuperInstance: function (memberTable, derivedInstance) {
 			var superInstance = Object.create(memberTable.class);
 
 			superInstance.proxy = {};
-			superInstance.__topInstance__ = (derivedInstance.__topInstance__ || derivedInstance);
+			superInstance.__derivedInstance__ = derivedInstance;
 
 			return superInstance;
+		},
+
+		/**
+		 * ## - Instances.restoreFinalMember()
+		 *
+		 * Restores the inherited value from a base class instance final member by propagating it up the __derivedInstance__ chain
+		 * @param {name} [String] : The name of the final member
+		 * @param {base} [Object] : The base object
+		 */
+		restoreFinalMember: function (name, base) {
+			var derivedInstance = base.__derivedInstance__;
+
+			do {
+				if (A.isUndefined(derivedInstance) || A.isUndefined(derivedInstance[name])) {
+					break;
+				}
+
+				var isProxied = A.has(derivedInstance.proxy, name);
+
+				Members.purge(derivedInstance, name);
+				A.bindReference(name, derivedInstance, base);
+
+				if (isProxied) {
+					A.bindReference(name, derivedInstance.proxy, derivedInstance);
+				}
+			} while ((derivedInstance = derivedInstance.__derivedInstance__));
 		},
 
 		/**
@@ -1772,7 +1795,6 @@
 		 */
 		bind: function (proxy, base, members, forceRevert) {
 			var baseProto = Object.getPrototypeOf(base);
-			var topInstance = base.__topInstance__ || {};
 
 			A.eachInArray(members, function(name){
 				var isFinal = false;
@@ -1780,7 +1802,6 @@
 				if (!A.isUndefined(proxy[name])) {
 					if (forceRevert && !A.isWritable(baseProto, name)) {
 						Members.purge(proxy, name);
-						Members.purge(topInstance, name);
 
 						isFinal = true;
 					} else {
@@ -1802,9 +1823,7 @@
 				}
 
 				if (isFinal) {
-					// TODO: Refactor/clean up this ancestor class final member business
-					A.bindReference(name, topInstance, base);
-					A.bindReference(name, topInstance.proxy, topInstance);
+					Instances.restoreFinalMember(name, base);
 				}
 			});
 		},
@@ -1812,7 +1831,7 @@
 		/**
 		 * ## - Instances.initialize()
 		 *
-		 * Prepares an instance with special methods and calls its "new()" constructor method once before removal
+		 * Prepares an instance with special methods and calls its "new()" constructor method once
 		 * @param {module} [String] : The class name
 		 * @param {instance} [Object] : The class instance
 		 * @param {supers} [Array<String>] : A list of superclasses by name
@@ -1824,9 +1843,6 @@
 			Instances.bindMethod.is(instance, module);
 
 			instance.new.apply(instance, args);
-
-			instance.new = null;
-			instance.proxy.new = null;
 		},
 
 		/**
@@ -1848,6 +1864,34 @@
 					});
 				}
 			}
+		},
+
+		/**
+		 * ## - Instances.sanitize()
+		 *
+		 * Removes obsolete properties from a base instance object
+		 * @param {instance} [Object] : The base instance object
+		 */
+		sanitize: function (instance) {
+			delete instance.__derivedInstance__;
+			delete instance.__superArgs__;
+
+			instance.new = null;
+			instance.proxy.new = null;
+		},
+
+		/**
+		 * ## - Instances.sanitizeAll()
+		 *
+		 * Invokes Instances.sanitize() on multiple base instance objects
+		 * @param {object, [object1, [object2, ...]]} [Object] : The base instance objects as separate arguments
+		 */
+		sanitizeAll: function () {
+			var args = A.argsToArray(arguments);
+
+			A.eachInArray(args, function(arg){
+				Instances.sanitize(arg);
+			});
 		}
 	};
 

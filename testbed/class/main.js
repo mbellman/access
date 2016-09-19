@@ -105,8 +105,8 @@
 				});
 			});
 
-			describe('Final static members', function () {
-				it('Should exist as both an immutable constructor and instance property', function () {
+			describe('Public final static members', function () {
+				it('Should exist as an immutable property of both the constructor and instance', function () {
 					var testClass = new TestClass();
 
 					var constant = "Static final message";

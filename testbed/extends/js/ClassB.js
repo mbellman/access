@@ -1,6 +1,6 @@
 include('ClassA.js');
 
-Class('ClassB').extends('ClassA')(function(public){
+Class('ClassB').extends('ClassA')(function(public, private, protected){
 	public.aFinal = "Final message override attempt";
 
 	public.new = function (message) {

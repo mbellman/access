@@ -17,11 +17,14 @@
 				});
 			});
 
-			describe('Level-two inheritance', function () {
+			describe('Deep inheritance', function () {
 				it('Should ensure that final members of base classes are not overriden by any descendant classes', function () {
 					var classC = new ClassC();
+					var classD = new ClassD();
 
 					assert(that(classC.aFinal).equals("Class A final message"));
+					assert(that(classD.aFinal).equals("Class A final message"));
+					assert(that(classD.getSuperAFinal()).equals("Class A final message"));
 				});
 			});
 		});

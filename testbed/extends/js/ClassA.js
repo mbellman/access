@@ -1,4 +1,4 @@
-Class('ClassA')(function(public, protected, private){
+Class('ClassA')(function(public, private, protected){
 	private.aPrivate = "Class A secret message";
 	protected.aProtected = "Class A protected message";
 	public.aPublic = "Class A public message";
