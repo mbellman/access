@@ -52,7 +52,7 @@ Class('ClassA')(function(public, private){
 ```
 
 # Interface
-An **Interface** defines a collection of variables and methods which must be publicly defined by implementing classes.
+An **Interface** defines a collection of variables and methods which must be publicly defined by implementing [classes](#class).
 
 ### Usage
 `Interface(name)`
@@ -64,9 +64,9 @@ An **Interface** defines a collection of variables and methods which must be pub
 `Interface Definer` (Function) : An [Interface Definer](#interface-definer)
 
 ### Description
-Interfaces are distinct from [Classes](#class) in that they cannot be instantiated, obtained via [get()](#get) or [include()](#include), or otherwise referenced directly within your application's code. They can however be [implemented](#implements) by classes, which essentially just runs a validation check during class generation ensuring that any implementing class publicly overrides the Interface members with a custom implementation. Note, however, that by specifying arguments for an interface method, we can require class implementations of that method to use the same number of arguments. Meanwhile, interface variables must be defined as null to indicate their status as such.
+Interfaces are distinct from classes in that they cannot be instantiated, obtained via [get()](#get) or [include()](#include), or otherwise referenced directly within your application's code. They can however be [implemented](#implements) by classes, which essentially just runs a validation check during class generation ensuring that any implementing class publicly overrides the Interface members with a custom implementation. Note, however, that by specifying arguments for an interface method, we can require class implementations of that method to use the same number of arguments. Meanwhile, interface variables must be defined as null to indicate their status as such.
 
-For more information, see [the main readme entry on interfaces](../master#interfaces).
+For more information, see [the main readme entry on interfaces](../#interfaces).
 
 ### Example
 
@@ -132,7 +132,7 @@ Class('Soup').implements('IFood')(function(public, private){
 ```
 
 # module
-**module()** defines "free" functions or objects to be included in other files.
+**module()** defines "free" functions or objects to be [included](#include) in other files.
 
 ### Usage
 `module(name, export)`
@@ -145,7 +145,7 @@ Class('Soup').implements('IFood')(function(public, private){
 No return value
 
 ### Description
-Certain routines or objects not bound to any particular class can be defined in isolation using the **module()** method. They can then be [included](#include) or [gotten](#get) in other script files for use.
+Certain routines or objects not bound to any particular [class](#class) can be defined in isolation using the **module()** method. They can then be included or [gotten](#get) in other script files for use.
 
 ### Example
 `utils.js`
@@ -202,7 +202,7 @@ include('Application.js');
 ```
 
 # namespace
-A **namespace** provides a common grouping of related classes or modules. [Interfaces](#interface) remain unaffected by namespacing.
+A **namespace** provides a common grouping of related [classes](#class) or [modules](#module). [Interfaces](#interface) remain unaffected by namespacing.
 
 ### Usage
 `namespace(name)`
@@ -214,7 +214,7 @@ A **namespace** provides a common grouping of related classes or modules. [Inter
 No return value
 
 ### Description
-Calling **namespace()** at a particular point in a script file will cause all following [classes](#class) or [modules](#module) inside the file to fall under the specified namespace. **Namespaces** are used to associated related classes or modules, either for clarity, organization, or as a formality. Namespaced classes and modules can still be [included](#include) or [gotten](#get) directly, but by invoking [use.namespace()](#usenamespace) they can all be obtained as a group.
+Calling **namespace()** at a particular point in a script file will cause all following classes or modules inside the file to fall under the specified namespace. **Namespaces** are used to associated related classes or modules, either for clarity, organization, or as a formality. Namespaced classes and modules can still be [included](#include) or [gotten](#get) directly, but by invoking [use.namespace()](#usenamespace) they can all be obtained as a group.
 
 ### Example
 `getCoordinateProjection.js`
@@ -260,7 +260,7 @@ Class('SceneRenderer')(function(public){
 `namespace` (Object) : The namespace object
 
 ### Description
-When [included](#include) script files use [namespacing](#namespace) to categorize classes or modules, these classes/modules are added to an internal namespace object. **use.namespace()** retrieves this object and all of its contained classes/modules.
+When [included](#include) script files use namespacing to categorize [classes](#class) or [modules](#module), these classes/modules are added to an internal namespace object. **use.namespace()** retrieves this object and all of its contained classes/modules.
 
 ### Example
 ```javascript
@@ -313,7 +313,7 @@ var coordinate = Graphics.getCoordinateProjection(5, 3.2, 7.9);
 ```
 
 # get
-**get()** merely retrieves a class or module with the assumption that the containing script has already been included.
+**get()** merely retrieves a [class](#class) or [module](#module) with the assumption that the containing script has already been included.
 
 ### Usage
 `get(dependencyName)`
@@ -362,7 +362,7 @@ module('extend', function () {
 No return value
 
 ### Description
-Because of the asynchronous nature of script [includes](#include) and [class](#class) generation, it is "unsafe" to attempt to instantiate any classes or call any free [module](#module) methods before scripts and classes/modules are resolved. **main()** allows for the definition of one application entry point function to be called once the application is ready to be run. Any class instantiation or free module references should occur either within **main()** or following the sequence of events kicked off within **main()**.
+Because of the asynchronous nature of script [includes](#include) and [class](#class) generation, it is "unsafe" to attempt to instantiate any classes or call any free [module](#module) methods before scripts and classes/modules are resolved. **main()** allows for the definition of one application entry point function to be called once the application is ready to be run. Any class instantiation or free module references should occur either within **main()** or following the sequence of events kicked off by the **main()** callback.
 
 ### Example
 ```javascript
@@ -387,7 +387,7 @@ Because of the asynchronous nature of script [includes](#include) and [class](#c
 The following includes patterns and utilities that aren't available as explicit API methods, but are instead constructs used in the library's design.
 
 # Class Definer
-A **Class Definer** function is used to extend base classes, implement an interface, and define class members via its [builder](#builder) function argument.
+A **Class Definer** function is used to extend base [classes](#class), implement an [interface](#interface), and define class members via its [builder](#builder) function argument.
 
 ### Usage
 `Class('MyClass')(builder)`
@@ -491,7 +491,7 @@ Class('MyClass').implements(interfaceName)(function(public){
 `Class Definer` (Function) : The [Class Definer](#class-definer) function for chaining
 
 ### Description
-**implements** provides a mechanism for a class to implement an [interface](#interface). However, unlike with traditional interface implementation, neither the interface itself nor its properties can be directly imported or accessed. Interfaces here only establish a "contract" which implementing classes must follow by overriding all variables and methods of the interface and making them **public** members. Functionality-wise, they have no real "use" but to enforce adoption of these members.
+**implements** provides a mechanism for a [class](#class) to implement an interface. However, unlike with traditional interface implementation, neither the interface itself nor its properties can be directly imported or accessed. Interfaces here only establish a "contract" which implementing classes must follow by overriding all variables and methods of the interface and making them **public** members. Functionality-wise, they have no real "use" but to enforce adoption of these members.
 
 ### Example
 ```javascript
@@ -510,13 +510,13 @@ Class('ClassA').implements('IClassInterface')(function(public){
 ```
 
 # Interface Definer
-An **Interface Definer** function receives an object to define an interface.
+An **Interface Definer** function receives an object to define an [interface](#interface).
 
 ### Usage
 `Interface('IClassInterface')(object)`
 
 ### Arguments
-`object` (Object) : A list of variables and methods to require in implementing classes
+`object` (Object) : A list of variables and methods to include in the interface
 
 ### Returns
 No return value
