@@ -138,7 +138,7 @@ Class('Soup').implements('IFood')(function(public, private){
 `module(name, export)`
 
 ### Arguments
-`name` (String) : A name identifier for the module
+`name` (String) : A name identifier for the module  
 `export` (Function | Object) : A function or object representing the content of the module
 
 ### Returns
@@ -278,11 +278,11 @@ var coordinate = Graphics.getCoordinateProjection(5, 3.2, 7.9);
 **include()** is used to manage dependencies and script imports.
 
 ### Usage
-`include(dependencyName).from(script)`
+`include(dependencyName).from(script)`  
 `include(script)`
 
 ### Arguments
-`dependencyName` (String) : The class or module to retrieve by name
+`dependencyName` (String) : The class or module to retrieve by name  
 `script` (String) : The path to the script file containing the class or module
 
 ### Returns
