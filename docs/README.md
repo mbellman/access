@@ -66,7 +66,7 @@ An **Interface** defines a collection of variables and methods which must be pub
 ### Description
 Interfaces are distinct from classes in that they cannot be instantiated, obtained via [get()](#get) or [include()](#include), or otherwise referenced directly within your application's code. They can however be [implemented](#implements) by classes, which essentially just runs a validation check during class generation ensuring that any implementing class publicly overrides the Interface members with a custom implementation. Note, however, that by specifying arguments for an interface method, we can require class implementations of that method to use the same number of arguments. Meanwhile, interface variables must be defined as null to indicate their status as such.
 
-For more information, see [the main readme entry on interfaces](../#interfaces).
+For more information, see [the main readme entry on interfaces](../README.md#interfaces).
 
 ### Example
 
@@ -105,8 +105,8 @@ Class('Hamburger').implements('IFood')(function(public, private){
 });
 
 Class('Soup').implements('IFood')(function(public, private){
-	this.broth = null;
-	this.additions = [];
+	private.broth = null;
+	private.additions = [];
 	public.name = "Soup";     // Interface variable
 	public.calories = 450;    // Interface variable
 
@@ -299,7 +299,7 @@ var coordinate = Graphics.getCoordinateProjection(5, 3.2, 7.9);
 	var User = include('User').from('core/User.js');
 
 	Class('Application')(function(public){
-		this.user = null;
+		public.user = null;
 
 		public.new = function () {
 			this.user = new User();
