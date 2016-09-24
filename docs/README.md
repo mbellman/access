@@ -5,7 +5,7 @@
 [> Interface](#interface)  
 [> root](#root)  
 [> namespace](#namespace)  
-[> use.namespace](#use-namespace)  
+[> use.namespace](#usenamespace)  
 [> include](#include)  
 [> get](#get)  
 [> main](#main)  
@@ -166,7 +166,7 @@ A **namespace** provides a common grouping of related classes or modules. [Inter
 No return value
 
 ### Description
-Calling **namespace()** at a particular point in a script file will cause all following [classes](#class) or [modules](#module) inside the file to fall under the specified namespace. **Namespaces** are used to associated related classes or modules, either for clarity, organization, or as a formality. Namespaced classes and modules can still be [included](#include) or [gotten](#get) directly, but by invoking [use.namespace()](#use-namespace) they can all be obtained as a group.
+Calling **namespace()** at a particular point in a script file will cause all following [classes](#class) or [modules](#module) inside the file to fall under the specified namespace. **Namespaces** are used to associated related classes or modules, either for clarity, organization, or as a formality. Namespaced classes and modules can still be [included](#include) or [gotten](#get) directly, but by invoking [use.namespace()](#usenamespace) they can all be obtained as a group.
 
 ### Example
 `getCoordinateProjection.js`
@@ -203,7 +203,7 @@ Class('SceneRenderer')(function(public){
 **use.namespace()** retrieves a [namespace](#namespace) object.
 
 ### Usage
-`var Namespace = use.namespace(name)`
+`use.namespace(name)`
 
 ### Arguments
 `name` (String) : The namespace identifier
@@ -230,15 +230,15 @@ var coordinate = Graphics.getCoordinateProjection(5, 3.2, 7.9);
 **include()** is used to manage dependencies and script imports.
 
 ### Usage
-`include(dependency).from(script)`
+`include(dependencyName).from(script)`
 `include(script)`
 
 ### Arguments
-`dependency` (String) : The class or module to retrieve by name
+`dependencyName` (String) : The class or module to retrieve by name
 `script` (String) : The path to the script file containing the class or module
 
 ### Returns
-`module` (Function) : The class constructor function or module requested
+`dependency` (Function) : The class constructor function or module requested
 
 ### Description
 **include()** either retrieves a dependency and provides a chainable **from()** method to specify the containing script file, or simply loads a script file ending with a valid extension.
@@ -248,7 +248,6 @@ var coordinate = Graphics.getCoordinateProjection(5, 3.2, 7.9);
 (function(){
 	include('core/AppUtils.js');
 
-	// Called inside a self-invoking anonymous function for scoping
 	var User = include('User').from('core/User.js');
 
 	Class('Application')(function(public){
@@ -269,16 +268,16 @@ var coordinate = Graphics.getCoordinateProjection(5, 3.2, 7.9);
 **get()** merely retrieves a class or module with the assumption that the containing script has already been included.
 
 ### Usage
-`get(dependency)`
+`get(dependencyName)`
 
 ### Arguments
-`dependency` (String) : The class or module to retrieve by name
+`dependencyName` (String) : The class or module to retrieve by name
 
 ### Returns
-`module` (Function) : The class constructor function or module requested
+`dependency` (Function) : The class constructor function or module requested
 
 ### Description
-Whenever an [included](#include) script file defines multiple classes or modules, it may be easier to simply include the file once, and use **get()** to obtain the specific classes or modules needed. **get()** only serves as a shorthand for **include(dependency).from(script)**, sans the script load.
+Whenever an [included](#include) script file defines multiple classes or modules, it may be easier to simply include the file once, and use **get()** to obtain the specific classes or modules needed. **get()** only serves as a shorthand for **include(dependencyName).from(script)**, sans the script load.
 
 ### Example
 `core/AppUtils.js`
