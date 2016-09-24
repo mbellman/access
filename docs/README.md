@@ -3,6 +3,7 @@
 [Global Methods](#i-global-methods)  
 [> Class](#class)  
 [> Interface](#interface)  
+[> module](#module)  
 [> root](#root)  
 [> namespace](#namespace)  
 [> use.namespace](#usenamespace)  
@@ -128,6 +129,53 @@ Class('Soup').implements('IFood')(function(public, private){
 		return [setting, utensil, this.broth, this.additions];
 	};
 });
+```
+
+# module
+**module()** defines "free" functions or objects to be included in other files.
+
+### Usage
+`module(name, export)`
+
+### Arguments
+`name` (String) : A name identifier for the module
+`export` (Function | Object) : A function or object representing the content of the module
+
+### Returns
+No return value
+
+### Description
+Certain routines or objects not bound to any particular class can be defined in isolation using the **module()** method. They can then be [included](#include) or [gotten](#get) in other script files for use.
+
+### Example
+`utils.js`
+```javascript
+module('reverseText', function (string) {
+	return string.split('').reverse().join('');
+});
+
+module('props', {
+	value: "Hi!",
+	num: 123
+});
+```
+
+`main.js`
+```javascript
+(function(){
+	include('utils.js');
+
+	var reverseText = get('reverseText');
+	var props = get('props');
+
+	main(function(){
+		var reversed = reverseText("Hello there!");
+
+		console.log(reversed);     // "!ereht olleH"
+		console.log(props.value);  // "Hi!"
+		console.log(props.num);    // 123
+	});
+})();
 ```
 
 # root
@@ -321,7 +369,7 @@ Because of the asynchronous nature of script [includes](#include) and [class](#c
 (function(){
 	include('core/AppUtils.js');
 	include('core/System.js');
-	include('')
+	include('tools/Tools.js');
 
 	var Application = include('Application').from('core/Application.js');
 
