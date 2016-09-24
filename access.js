@@ -1324,8 +1324,9 @@
 				var interfaceName = definition.implements;
 
 				A.eachInObject(Modules.interfaces[interfaceName], function(member, value){
-					var classHasMember = memberTable.public.hasOwnProperty(member);
-					var memberIsFunction = A.isTypeOf(memberTable.public[member], 'function');
+					var classHasMember = A.has(memberTable.public, member);
+					var classMember = memberTable.public[member];
+					var memberIsFunction = A.isTypeOf(classMember, 'function');
 
 					switch (A.typeOf(value)) {
 						case 'null':
@@ -1334,7 +1335,10 @@
 							}
 							break;
 						case 'function':
-							if (!classHasMember || !memberIsFunction) {
+							if (
+								(!classHasMember || !memberIsFunction) ||
+								(value.length !== 0 && classMember.length !== value.length)
+							) {
 								throw new ImplementationException(className, interfaceName, member);
 							}
 							break;
