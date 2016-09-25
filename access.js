@@ -694,6 +694,10 @@
 		 * @param {file} [String] : The script file path
 		 */
 		getScript: function (file) {
+			if (window.ACCESS_BUNDLE_MODE) {
+				return;
+			}
+
 			var script = Imports.root + '/' + file;
 
 			if (!A.isInArray(Imports.scripts, script)) {
