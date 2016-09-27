@@ -352,7 +352,7 @@
 		 */
 		eachInObject: function (object, handler) {
 			for (var key in object) {
-				if (object.hasOwnProperty(key)) {
+				if (A.has(object, key)) {
 					if (handler(key, object[key], object) === false) {
 						break;
 					}
@@ -438,7 +438,7 @@
 
 			A.eachMultiple(objects, function(key, value){
 				if (A.isTypeOf(value, 'object')) {
-					if (!target.hasOwnProperty(key)) {
+					if (!A.has(target, key)) {
 						target[key] = {};
 					}
 
@@ -466,7 +466,7 @@
 			objects.shift();
 
 			A.eachMultiple(objects, function(key, value){
-				if (target.hasOwnProperty(key)) {
+				if (A.has(target, key)) {
 					delete target[key];
 				}
 			});
@@ -552,7 +552,7 @@
 		// [Boolean] : When toggled to true, class generation catalogues protected members for attachment to internal superclass "public" instances
 		inSuperMode: false,
 		// [String] : An optional namespace to write modules to rather than Modules.defined (a null value prevents any override)
-		namespace: null,
+		activeNamespace: null,
 		// [Array<String>] : A list of raised exception messages
 		exceptions: [],
 
@@ -768,7 +768,7 @@
 			 */
 			loadedOne: function (script) {
 				return function () {
-					Core.namespace = null;
+					Core.activeNamespace = null;
 
 					Core.DOM.remove(script);
 
@@ -912,7 +912,7 @@
 				flags.protected = false;
 
 				A.eachInArray(stack, function(value){
-					if (flags.hasOwnProperty(value)) {
+					if (A.has(flags, value)) {
 						flags[value] = true;
 					}
 				});
@@ -1135,7 +1135,7 @@
 
 					var eventQueue = Modules.events[event];
 
-					if (!eventQueue.hasOwnProperty(module)) {
+					if (!A.has(eventQueue, module)) {
 						eventQueue[module] = [];
 					}
 
@@ -1155,7 +1155,7 @@
 				if (A.isInArray(Modules.events.valid, event)) {
 					var eventQueue = Modules.events[event];
 
-					if (eventQueue.hasOwnProperty(module)) {
+					if (A.has(eventQueue, module)) {
 						A.each(eventQueue[module], function(handler){
 							handler.apply(null, args);
 						});
@@ -1187,7 +1187,7 @@
 		 * @returns [Boolean]
 		 */
 		isReady: function (module) {
-			return (Modules.has(module) && !Modules.queue.hasOwnProperty(module));
+			return (Modules.has(module) && !A.has(Modules.queue, module));
 		},
 
 		/**
@@ -1209,7 +1209,7 @@
 		 * @returns [Boolean]
 		 */
 		isFreeModule: function (module) {
-			return Modules.free.hasOwnProperty(module);
+			return A.has(Modules.free, module);
 		},
 
 		/**
@@ -1255,8 +1255,8 @@
 		 */
 		has: function (module) {
 			return (
-				(Modules.defined.hasOwnProperty(module) && A.isFunction(Modules.defined[module])) ||
-				(Modules.free.hasOwnProperty(module) || Modules.interfaces.hasOwnProperty(module))
+				(A.has(Modules.defined, module) && A.isFunction(Modules.defined[module])) ||
+				(A.has(Modules.free, module) || A.has(Modules.interfaces, module))
 			);
 		},
 
@@ -1318,7 +1318,7 @@
 		 * ## - Modules.verifyImplementation()
 		 *
 		 * Verifies whether an interface has been properly implemented by a class and incorporated into its member table
-		 * @param {definition} [String] : The class definition instance
+		 * @param {definition} [ClassDefinition] : The class definition instance
 		 * @param {memberTable} [Object] : The class member table
 		 * @throws [ImplementationException OR InterfaceDefinitionException]
 		 */
@@ -1326,16 +1326,17 @@
 			try {
 				var className = definition.name;
 				var interfaceName = definition.implements;
+				var interfaceMembers = Modules.interfaces[interfaceName];
 
-				A.eachInObject(Modules.interfaces[interfaceName], function(member, value){
-					var classHasMember = A.has(memberTable.public, member);
-					var classMember = memberTable.public[member];
+				A.eachInObject(interfaceMembers, function(interfaceMember, value){
+					var classHasMember = A.has(memberTable.public, interfaceMember);
+					var classMember = memberTable.public[interfaceMember];
 					var memberIsFunction = A.isTypeOf(classMember, 'function');
 
 					switch (A.typeOf(value)) {
 						case 'null':
 							if (!classHasMember || memberIsFunction) {
-								throw new ImplementationException(className, interfaceName, member);
+								throw new ImplementationException(className, interfaceName, interfaceMember);
 							}
 							break;
 						case 'function':
@@ -1343,11 +1344,11 @@
 								(!classHasMember || !memberIsFunction) ||
 								(value.length !== 0 && classMember.length !== value.length)
 							) {
-								throw new ImplementationException(className, interfaceName, member);
+								throw new ImplementationException(className, interfaceName, interfaceMember);
 							}
 							break;
 						default:
-							throw new InterfaceDefinitionException(interfaceName, member);
+							throw new InterfaceDefinitionException(interfaceName, interfaceMember);
 					}
 				});
 			} catch (e) {
@@ -1406,15 +1407,15 @@
 		 *
 		 * Internally saves a freely-defined module and defines its type
 		 * @param {module} [String] : The module name
-		 * @param {data} [Function OR Object] : The module definition
+		 * @param {definition} [Function OR Object] : The module definition
 		 * @param {type} [String] : The module type
 		 */
-		buildFreeModule: function (module, data, type) {
-			Modules.free[module] = data;
+		buildFreeModule: function (module, definition, type) {
+			Modules.free[module] = definition;
 			Modules.definedTypes[module] = type;
 
-			if (Core.namespace !== null) {
-				Namespaces.save(module, Core.namespace);
+			if (Core.activeNamespace !== null) {
+				Namespaces.save(module, Core.activeNamespace);
 			}
 		},
 
@@ -1521,7 +1522,7 @@
 		 * @returns [Boolean]
 		 */
 		has: function (module) {
-			return (Supers.constructors.hasOwnProperty(module) && Supers.memberTables.hasOwnProperty(module));
+			return (A.has(Supers.constructors, module) && A.has(Supers.memberTables, module));
 		},
 
 		/**
@@ -1918,7 +1919,7 @@
 		 * @returns [Boolean]
 		 */
 		has: function (space) {
-			return Namespaces.defined.hasOwnProperty(space);
+			return A.has(Namespaces.defined, space);
 		},
 
 		/**
@@ -2007,7 +2008,7 @@
 		// [String] : The class type; defaults to 'Class'
 		this.type = type || Modules.types.CLASS;
 		// [String] : The target namespace for the class
-		this.namespace = Core.namespace;
+		this.namespace = Core.activeNamespace;
 		// [Array<String>] : Base classes to extend
 		this.extends = [];
 		// [String] : Interface to implement
@@ -2024,7 +2025,7 @@
 		 */
 		this.validate = function () {
 			try {
-				if (Modules.definedTypes.hasOwnProperty(this.name)) {
+				if (A.has(Modules.definedTypes, this.name)) {
 					throw new MultiDefinitionException(this.name);
 				}
 
@@ -2166,7 +2167,7 @@
 	 * @param {name} [String] : The namespace name
 	 */
 	function namespace (name) {
-		Core.namespace = name;
+		Core.activeNamespace = name;
 	}
 
 	/**
