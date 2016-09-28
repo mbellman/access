@@ -1,6 +1,6 @@
 # Access : Documentation
 
-[Global Methods](#i-global-methods)  
+[I. Global Methods](#i-global-methods)  
 [> Class](#class)  
 [> Final.Class](#finalclass)  
 [> Abstract.Class](#abstractclass)  
@@ -12,12 +12,12 @@
 [> include](#include)  
 [> get](#get)  
 [> main](#main)  
-[> ACCESS_BUNDLE_MODE](#access-bundle-mode)  
-[Instance Methods](#ii-instance-methods)  
+[> ACCESS_BUNDLE_MODE](#access_bundle_mode)  
+[II. Instance Methods](#ii-instance-methods)  
 [> is](#is)  
 [> new](#new)  
 [> super](#super)  
-[Internals](#iii-internals)  
+[III. Internals](#iii-internals)  
 [> Class Definer](#class-definer)  
 [> extends](#extends)  
 [> implements](#implements)  
@@ -472,7 +472,7 @@ Because of the asynchronous nature of script [includes](#include) and [class](#c
 ```
 
 # ACCESS_BUNDLE_MODE
-While not technically a function, setting the global `ACCESS_BUNDLE_MODE` variable to `true` will cause Access to **ignore script includes**. The purpose of this is to allow many module files to be bundled into one and run without script dependencies failing to be resolved. Meanwhile, all module [includes](#include) and [gets](#get) will still function as normal, allowing for code consolidation and minification.
+While not technically a function, setting the global `ACCESS_BUNDLE_MODE` variable to `true` will cause Access to **ignore script includes**. The purpose of this is to allow many module files to be bundled into one and run without script dependencies failing to be resolved. Meanwhile, all module [includes](#include) and [gets](#get) will still function as normal, allowing for code consolidation and minification without any disruption of behavior.
 
 ### Example
 `bundle.js`
