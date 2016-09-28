@@ -21,7 +21,8 @@
 [> Class Definer](#class-definer)  
 [> extends](#extends)  
 [> implements](#implements)  
-[> Interface Definer](#interface-definer)
+[> Interface Definer](#interface-definer)  
+[> builder](#builder)
 
 ## I. Global Methods
 All global methods are deleted from `window` immediately prior to class generation.
