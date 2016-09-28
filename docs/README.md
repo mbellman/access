@@ -603,6 +603,10 @@ Class('MyClass')(function(public, private){
 ```javascript
 // Superclass "BaseClass" defined in another file...
 Class('MyClass').extends('BaseClass')(function(public){
+	public.new = function () {
+		this.super(/* ... */);   // Arguments for the superclass
+	};
+
 	public.callSuperMethod = function () {
 		this.super.callMethod();
 	};
@@ -610,13 +614,14 @@ Class('MyClass').extends('BaseClass')(function(public){
 ```
 
 ### Arguments
-Not a function
+**Inside new():** Custom arguments  
+**Outside new():** Not a function
 
 ### Returns
 No return value
 
 ### Description
-**super** is a special property attached to the internal `this` context of a derived class which permits access to public and protected superclass members, even if they are overridden by the derived class. When derived classes do **not** override superclass members, both public and protected superclass members are still accessible directly on the internal `this` context, making `super` rather **super**fluous in this case. The other useful function of **super** is to act as a pseudo-constructor for superclasses when called inside the [new](#new) method of a derived class. Note that superclass members **are not by any means** accessible until referenced in derived class members **other than** `new`.
+**super** is a special property attached to the internal `this` context of a derived class which permits access to public and protected superclass members, even when they are overridden by the derived class. When derived classes do **not** override superclass members, both public and protected superclass members are still accessible directly on the internal `this` context of the derived class, making `super` rather **super**fluous in this case. The other useful function of **super** is to act as a pseudo-constructor for superclasses when called inside the [new](#new) method of a derived class. Note that superclass members **are not by any means** accessible until referenced in derived class methods **other than** `new`.
 
 ### Example
 **super** as a means of referencing overridden superclass members:
@@ -654,11 +659,19 @@ Class('BaseClass')(function(public){
 	public.new = function (message) {
 		console.log(message);
 	};
+
+	public.baseMethod = function () {
+		// ...
+	};
 });
 
 Class('MyClass').extends('BaseClass')(function(public){
 	public.new = function () {
 		this.super("Hi there!");
+
+		// Trying to reference 'this.super.baseMethod' would fail here,
+		// since supers are technically created immediately after 'new()'
+		// finishes, albeit using any arguments passed in via 'this.super()'
 	};
 });
 ```
