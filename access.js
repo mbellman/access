@@ -1174,8 +1174,16 @@
 		 */
 		getDefiner: function (context) {
 			return A.bind(function definer(builder){
-				this.builder = builder;
-				Modules.queue[this.name] = this;
+				try {
+					if (A.has(Modules.queue, this.name)) {
+						throw new MultiDefinitionException(this.name);
+					}
+
+					this.builder = builder;
+					Modules.queue[this.name] = this;
+				} catch (e) {
+					Core.raiseException(e);
+				}
 			}, context);
 		},
 
@@ -1969,6 +1977,7 @@
 
 		/**
 		 * ## - InterfaceDefinition.build()
+		 * @throws [MultiDefinitionException]
 		 */
 		this.build = function () {
 			delete Modules.queue[this.name];
@@ -2021,15 +2030,11 @@
 		 *
 		 * Prevents name collisions and ensures that extending classes/interfaces are specified appropriately
 		 * @throws [MultiDefinitionException OR InterfaceExtendedException OR ClassImplementedException]
-		 * @returns [Boolean] : Class definition validity
+		 * @returns [Boolean] : Class validation check
 		 */
 		this.validate = function () {
 			try {
-				if (A.has(Modules.definedTypes, this.name)) {
-					throw new MultiDefinitionException(this.name);
-				}
-
-				A.eachInArray(this.extends, function(module){
+				A.each(this.extends, function(module){
 					if (Modules.isInterface(module)) {
 						throw new InterfaceExtendedException(module, this.name);
 					}

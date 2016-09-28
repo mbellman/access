@@ -2,6 +2,8 @@
 
 [Global Methods](#i-global-methods)  
 [> Class](#class)  
+[> Final.Class](#finalclass)  
+[> Abstract.Class](#abstractclass)  
 [> Interface](#interface)  
 [> module](#module)  
 [> root](#root)  
@@ -10,7 +12,12 @@
 [> include](#include)  
 [> get](#get)  
 [> main](#main)  
-[Internals](#ii-internals)  
+[> ACCESS_BUNDLE_MODE](#access-bundle-mode)  
+[Instance Methods](#ii-instance-methods)  
+[> is](#is)  
+[> new](#new)  
+[> super](#super)  
+[Internals](#iii-internals)  
 [> Class Definer](#class-definer)  
 [> extends](#extends)  
 [> implements](#implements)  
@@ -49,6 +56,89 @@ Class('ClassA')(function(public, private){
 		return this.secretNumber;
 	};
 });
+```
+
+# Final.Class
+[Classes](#class) can be declared as **final** with `Final.Class`.
+
+### Usage
+`Final.Class(name)`
+
+### Arguments
+`name` (String) : The name of the class
+
+### Returns
+`Class Definer` (Function) : A [Class Definer](#class-definer)
+
+### Description
+**Final Classes** are special class variants which cannot be [extended](#extends) by other classes. In some cases one may wish for a class not to be inheritable, or that it should represent the "topmost" level of an inheritance hierarchy. Final classes are expressly suited for such purposes.
+
+### Example
+```javascript
+Class('BaseLevel')(function(public){
+	public.new = function (message) {
+		console.log(message);
+	};	
+});
+
+Final.Class('TopLevel').extends('BaseLevel')(function(public){
+	public.new = function () {
+		this.super('TopLevel extending BaseLevel!');
+	};
+});
+
+// "Final Class [TopLevel] cannot be extended"
+Class('DerivedLevel').extends('TopLevel')(function(public){
+	// ...
+});
+```
+
+# Abstract.Class
+[Classes](#class) can be declared as **abstract** with `Abstract.Class`.
+
+### Usage
+`Abstract.Class(name)`
+
+### Arguments
+`name` (String) : The name of the class
+
+### Returns
+`Class Definer` (Function) : A [Class Definer](#class-definer)
+
+### Description
+**Abstract Classes** are special class variants which cannot be instantiated. They represent a primitive or generalized implementation which is designed to be [extended](#extends) by other classes, but not strictly usable on its own. They differ from [interfaces](#interface) in that overriding the members of an abstract class is not mandatory, and said members can have unique values. They are appropriate when one intends for the class to be [extended](#extends) in a potential variety of ways, but not to enforce a "contract" requiring an implementation override of any specific members.
+
+### Example
+`abstract.js`
+```javascript
+Abstract.Class('SimpleClass')(function(public){
+	public.value = "Hello";
+
+	public.method = function () {
+		console.log(this.value);
+	};
+});
+
+Class('ComplexClass').extends('SimpleClass')(function(public){
+	public.complexMethod = function () {
+		this.super.method();
+	};
+});
+```
+
+`main.js`
+```javascript
+(function(){
+	include('abstract.js');
+
+	var SimpleClass = get('SimpleClass');
+	var ComplexClass = get('ComplexClass');
+
+	main(function(){
+		// "Cannot instantiate Abstract Class [SimpleClass]"
+		var simpleClass = new SimpleClass();
+	});
+})();
 ```
 
 # Interface
@@ -381,9 +471,201 @@ Because of the asynchronous nature of script [includes](#include) and [class](#c
 })();
 ```
 
+# ACCESS_BUNDLE_MODE
+While not technically a function, setting the global `ACCESS_BUNDLE_MODE` variable to `true` will cause Access to **ignore script includes**. The purpose of this is to allow many module files to be bundled into one and run without script dependencies failing to be resolved. Meanwhile, all module [includes](#include) and [gets](#get) will still function as normal, allowing for code consolidation and minification.
+
+### Example
+`bundle.js`
+```javascript
+ACCESS_BUNDLE_MODE = true;
+
+// Originally from "User.js"
+(function(){
+	Class('User')(function(public){
+		// ...
+	});
+})();
+
+// Originally from "SomeClass.js"
+(function(){
+	Class('SomeClass')(function(public){
+		public.baseMethod = function () {
+			// ...
+		};
+	});
+})();
+
+// Originally from "MyClass.js"
+(function(){
+	include('SomeClass.js');   // Ignored
+
+	var User = include('User').from('User.js');   // Returns the "User" class without loading any script called "User.js"
+
+	Class('MyClass').extends('SomeClass')(function(public){
+		public.user = null;
+
+		public.new = function () {
+			this.user = new User();
+		};
+	});
+})();
+```
+
 ---
 
-## II. Internals
+## II. Instance Methods
+All class instances have certain methods built-in. Some are publicly accessible on the outer instance, and some are accessible internally within the class definition.
+
+# is
+The `is()` method is attached to all class instances. Its use is to determine whether the instance is an **instance of** a specific class.
+
+### Usage
+`instance.is(class)`
+
+### Arguments
+`class` (String) : The name of the class to check the instance against
+
+### Returns
+No return value
+
+### Description
+Due to the nature by which **Access** implements class generation and instance construction to A) allow for asynchronous module loading and B) enable public/private/protected member behavior, returned instances are not strictly an `instanceof` their classes. `is()` provides a proprietary means of reconciling instances with their types. Any instance of a derived class will also evaluate as an instance of its inherited superclasses.
+
+### Example
+```javascript
+Class('Application')(function(public){
+	public.new = function () {
+		console.log('Instantiated!');
+	};
+});
+
+(function(){
+	var Application = get('Application');
+
+	main(function(){
+		var app = new Application();
+
+		app.is('Application');   // true
+	});
+})();
+```
+
+# new
+The `public.new` method inside a class is automatically run each time the class is instantiated.
+
+### Usage
+```javascript
+Class('MyClass')(function(public){
+	public.new = function () {
+		// ...
+	};
+});
+```
+
+### Arguments
+Custom arguments
+
+### Returns
+No return value
+
+### Description
+The **new** method of a class is run every time an instance of that class is created. It can be used to receive and process arguments passed into the constructor or to call any other initialization routines. Though it is declared as public, it is **not** accessible on individual instances and can only run once per instance.
+
+### Example
+```javascript
+Class('MyClass')(function(public, private){
+	private.value = null;
+
+	public.new = function (value) {
+		this.value = value;
+	};
+
+	public.getValue = function () {
+		return this.value;
+	};
+});
+
+(function(){
+	var MyClass = get('MyClass');
+
+	main(function(){
+		var myClass = new MyClass('Hi there!');
+
+		myClass.getValue();   // Returns 'Hi there!'
+	});
+})();
+```
+
+# super
+`super` provides a means of accessing superclass members from inside a derived class definition.
+
+### Usage
+```javascript
+// Superclass "BaseClass" defined in another file...
+Class('MyClass').extends('BaseClass')(function(public){
+	public.callSuperMethod = function () {
+		this.super.callMethod();
+	};
+});
+```
+
+### Arguments
+Not a function
+
+### Returns
+No return value
+
+### Description
+**super** is a special property attached to the internal `this` context of a derived class which permits access to public and protected superclass members, even if they are overridden by the derived class. When derived classes do **not** override superclass members, both public and protected superclass members are still accessible directly on the internal `this` context, making `super` rather **super**fluous in this case. The other useful function of **super** is to act as a pseudo-constructor for superclasses when called inside the [new](#new) method of a derived class. Note that superclass members **are not by any means** accessible until referenced in derived class members **other than** `new`.
+
+### Example
+**super** as a means of referencing overridden superclass members:
+
+```javascript
+Class('BaseClass')(function(public){
+	public.callMethod = function () {
+		console.log("Hello!");
+	};
+});
+
+Class('MyClass').extends('BaseClass')(function(public){
+	public.callMethod = function () {
+		console.log("Goodbye!");
+		this.super.callMethod();
+	};
+});
+
+(function(){
+	var MyClass = get('MyClass');
+
+	main(function(){
+		var myClass = new MyClass();
+
+		// "Goodbye!"
+		// "Hello!"
+		myClass.callMethod();
+	});
+})();
+```
+
+**super** as a means of (tentatively) passing arguments into superclass constructors:
+```javascript
+Class('BaseClass')(function(public){
+	public.new = function (message) {
+		console.log(message);
+	};
+});
+
+Class('MyClass').extends('BaseClass')(function(public){
+	public.new = function () {
+		this.super("Hi there!");
+	};
+});
+```
+
+---
+
+## III. Internals
 The following includes patterns and utilities that aren't available as explicit API methods, but are instead constructs used in the library's design.
 
 # Class Definer
@@ -532,5 +814,65 @@ Interface('IClassInterface')({
 
 	method1: function () {},
 	method2: function (arg) {}
+});
+```
+
+# builder
+A class **builder** function defines the class members.
+
+### Usage
+```javascript
+Class('MyClass')(function(public, private, protected){
+	public.publicMember = function () {
+		// ...
+	};
+
+	private.privateMember = function () {
+		// ...
+	};
+
+	protected.protectedMember = function () {
+		// ...
+	};
+});
+```
+
+### Arguments
+Automatically receives three arguments:  
+`public` (Object) : A receiver for public class members  
+`private` (Object) : A receiver for private class members  
+`protected` (Object) : A receiver for protected class members
+
+### Returns
+No return value
+
+### Description
+A class **builder** function serves to define its member structure. Using the three **access modifier** objects passed in, members can be selectively attached to these objects to define their level of accessibility. **Public** members are accessible both inside class members and on instances, **private** members are accessible via `this` only inside the methods of the class, and **protected** members are accessible via `this` inside the class methods or via `this` inside methods of a **directly** derived class. Each of these access modifier objects is equipped to allow declaration of members as **final** or **static** as well using the appropriate keyword chain. **Final** members cannot have their values changed or overriden by derived classes, and **static** members have a common value across all instances of a class. **Public static** members are attached to the class Constructor and can be referenced without explicit instantiation. For more specifics on the nature of access modifiers and inheritance, see [extends](#extends).
+
+### Example
+```javascript
+Class('ExampleClass')(function(public, private, protected){
+	private.string = "Hi there.";
+	private.static.secret = "Secret...";
+	public.value = "Hello!";
+	public.final.finalValue = "You cannot change me!";
+	public.static.number = 10;
+	public.static.final.thing = "Wow!";
+
+	public.new = function () {
+		console.log("Example!");
+	};
+
+	public.setSecret = function () {
+		this.secret = "New secret!";
+	};
+
+	private.internalMethod = function () {
+		// ...
+	};
+
+	protected.callInternalMethod = function () {
+		this.internalMethod();
+	};
 });
 ```
