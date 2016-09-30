@@ -708,11 +708,7 @@
 		},
 
 		findCyclicalDependencies: function (className) {
-			var cyclicalDependencies = DependencyGraph.cyclicalDependencies[className] || [];
-
-			if (A.isInArray)
-
-			return cyclicalDependencies;
+			return DependencyGraph.cyclicalDependencies[className] || [];
 		},
 
 		findMissingDependencies: function (dependencies) {
@@ -732,11 +728,9 @@
 				return;
 			}
 
-			if (cyclicalDependencies.length > 0) {
-				Diagnostics.hasReportedCyclicalDependency = true;
-			}
-
 			A.eachInArray(cyclicalDependencies, function(cycle){
+				Diagnostics.hasReportedCyclicalDependency = true;
+
 				Diagnostics.formatWarning(Diagnostics.errors.CYCLICAL_DEPENDENCY, cycle.join(' -> '));
 			});
 		},
