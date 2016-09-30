@@ -728,10 +728,10 @@
 				return;
 			}
 
-			A.eachInArray(cyclicalDependencies, function(cycle){
+			A.eachInArray(cyclicalDependencies, function(cyclicalDependency){
 				Diagnostics.hasReportedCyclicalDependency = true;
 
-				Diagnostics.formatWarning(Diagnostics.errors.CYCLICAL_DEPENDENCY, cycle.join(' -> '));
+				Diagnostics.formatWarning(Diagnostics.errors.CYCLICAL_DEPENDENCY, cyclicalDependency.join(' -> '));
 			});
 		},
 
@@ -798,16 +798,16 @@
 		 *
 		 * Stores a cyclical dependency chain detected during class dependency tree generation
 		 * @param {className} [String] : The name of the class spawning the cyclical dependency chain
-		 * @param {stack} [Array<String>] : The cyclical dependency chain
+		 * @param {stack} [Array<String>] : The dependency stack provided by getDependencyTree()/buildDependencySubTree()
 		 */
 		logCyclicalDependencies: function (className, stack) {
-			var chain = stack.concat(stack[0]);
+			var cyclicalDependency = stack.concat(stack[0]);
 
 			if (!A.has(DependencyGraph.cyclicalDependencies, className)) {
 				DependencyGraph.cyclicalDependencies[className] = [];
 			}
 
-			DependencyGraph.cyclicalDependencies[className].push(chain);
+			DependencyGraph.cyclicalDependencies[className].push(cyclicalDependency);
 		},
 
 		/**
