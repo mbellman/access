@@ -387,26 +387,34 @@
 		 * Optional @param {stack} [Array<String>] : The current stack of nested properties
 		 * Optional @param {context} [Object] : A context to bind the handler function to
 		 * Optional @param {allowed} [Array<String>] : Allowed traversable sub-objects by key name
+		 * @returns {terminated} [Boolean] : A flag which, when set to true, propagates up the recursion stack and halts the loop
 		 */
 		deepEach: function (object, handler, stack, context, allowed) {
 			handler = A.func(handler, context);
 			stack = stack || [];
 			allowed = allowed || [];
 
+			var terminated = false;
+
 			A.eachInObject(object, function(key, value){
+				stack.push(key);
+
 				if (A.isTypeOf(value, 'object')) {
 					if (allowed.length === 0 || A.isInArray(allowed, key)) {
-						stack.push(key);
-						A.deepEach(object[key], handler, stack, context, allowed);
-						stack.pop();
-						return;
+						if (A.deepEach(object[key], handler, stack, context, allowed) === true) {
+							return !(terminated = true);
+						}
+					}
+				} else {
+					if (handler(key, value, stack, object) === false) {
+						return !(terminated = true);
 					}
 				}
 
-				if (handler(key, value, stack, object) === false) {
-					return false;
-				}
+				stack.pop();
 			});
+
+			return terminated;
 		},
 
 		/**
@@ -510,6 +518,17 @@
 		},
 
 		/**
+		 * ## - A.getLastInArray()
+		 *
+		 * Returns the last element of an array
+		 * @param {array} [Array<*>] : The array to retrieve the element from
+		 * @returns [*]
+		 */
+		getLastInArray: function (array) {
+			return array.slice(array.length - 1)[0];
+		},
+
+		/**
 		 * ## - A.isInArray()
 		 *
 		 * Determine whether a value is contained within a one-dimensional array
@@ -553,7 +572,7 @@
 		inSuperMode: false,
 		// [String] : An optional namespace to write modules to rather than Modules.defined (a null value prevents any override)
 		activeNamespace: null,
-		// [Array<String>] : A list of raised exception messages
+		// [Array<String>] : A list of exception messages raised during class generation
 		exceptions: [],
 
 		/**
@@ -570,6 +589,7 @@
 		 */
 		init: function () {
 			Core.started = true;
+
 			Core.main();
 		},
 
@@ -597,11 +617,12 @@
 			A.delete(window, AccessUtilities);
 			Core.defineModules();
 
-			if (Core.exceptions.length === 0) {
+			var failedModules = A.getKeyNames(Modules.queue);
+
+			if (Core.exceptions.length === 0 && failedModules.length === 0) {
 				Core.init();
 			} else {
-				// TODO: See about smarter error messaging (nonexistent modules, circular dependencies, etc.)
-				console.warn('Access: Failed to initialize application');
+				Diagnostics.reportFailures(failedModules);
 			}
 		},
 
@@ -651,6 +672,198 @@
 			remove: function (node) {
 				document.body.removeChild(node);
 			}
+		}
+	};
+
+	/**
+	 * Class generation failure diagnostic tools
+	 */
+	var Diagnostics = {
+		// [Boolean] : Flag for having logged the first cyclical dependency; if true, don't log any more (until the first is fixed)
+		hasReportedCyclicalDependency: false,
+
+		// [Object{String}] : Error messages
+		errors: {
+			CYCLICAL_DEPENDENCY: 'Access: Cyclical dependency detected: {*}',
+			MISSING_DEPENDENCY: 'Access: Class [{*}] dependency [{*}] not defined',
+			MODULE_FAILURE: 'Access: Failed to generate module [{*}]',
+			INITIALIZATION_FAILURE: 'Access: Failed to initialize application'
+		},
+
+		format: function () {
+			var args = A.argsToArray(arguments);
+			var message = args.splice(0, 1)[0];
+
+			A.eachInArray(args, function(word){
+				message = message.replace('{*}', word);
+			});
+
+			return message;
+		},
+
+		formatWarning: function () {
+			var warning = Diagnostics.format.apply(null, arguments);
+
+			console.warn(warning);
+		},
+
+		findCyclicalDependencies: function (className) {
+			var cyclicalDependencies = DependencyGraph.cyclicalDependencies[className] || [];
+
+			if (A.isInArray)
+
+			return cyclicalDependencies;
+		},
+
+		findMissingDependencies: function (dependencies) {
+			var missingDependencies = [];
+
+			A.eachInArray(dependencies, function(dependency){
+				if (!Modules.has(dependency)) {
+					missingDependencies.push(dependency);
+				}
+			});
+
+			return missingDependencies;
+		},
+
+		dispatchCyclicalDependencyWarnings: function (cyclicalDependencies) {
+			if (Diagnostics.hasReportedCyclicalDependency) {
+				return;
+			}
+
+			if (cyclicalDependencies.length > 0) {
+				Diagnostics.hasReportedCyclicalDependency = true;
+			}
+
+			A.eachInArray(cyclicalDependencies, function(cycle){
+				Diagnostics.formatWarning(Diagnostics.errors.CYCLICAL_DEPENDENCY, cycle.join(' -> '));
+			});
+		},
+
+		dispatchMissingDependencyWarnings: function (className, dependencies) {
+			A.eachInArray(dependencies, function(dependency){
+				Diagnostics.formatWarning(Diagnostics.errors.MISSING_DEPENDENCY, className, dependency);
+			});
+		},
+
+		diagnoseClassFailure: function (className) {
+			var dependencyTree = DependencyGraph.getDependencyTree(className);
+			var cyclicalDependencies = Diagnostics.findCyclicalDependencies(className, dependencyTree);
+			var missingDependencies = Diagnostics.findMissingDependencies(DependencyGraph.dependencies[className]);
+
+			Diagnostics.dispatchCyclicalDependencyWarnings(cyclicalDependencies);
+			Diagnostics.dispatchMissingDependencyWarnings(className, missingDependencies);
+		},
+
+		diagnoseModuleFailure: function (module) {
+			Diagnostics.formatWarning(Diagnostics.errors.MODULE_FAILURE, module);
+		},
+
+		diagnose: function (module) {
+			if (Modules.isClass(module)) {
+				Diagnostics.diagnoseClassFailure(module);
+			} else {
+				Diagnostics.diagnoseModuleFailure(module);
+			}
+		},
+
+		reportFailures: function (failedModules) {
+			A.eachInArray(failedModules, Diagnostics.diagnose);
+
+			console.warn(Diagnostics.errors.INITIALIZATION_FAILURE);
+		}
+	};
+
+	/**
+	 * Class dependency graph utilities (primarily used for error reporting)
+	 */
+	var DependencyGraph = {
+		// [Object{Array<String>}] : Direct dependencies, if any, for each class
+		dependencies: {},
+		// [Array<Array<String>>] : A list of cyclical dependency chains found during tree generation
+		cyclicalDependencies: [],
+
+		/**
+		 * ## - DependencyGraph.logDependency()
+		 *
+		 * Stores all dependencies of a class to DependencyGraph.dependencies; used for circular or missing dependency detection
+		 * @param {module} [String] : The module name
+		 * @param {dependency} [String] : The dependency name
+		 */
+		logDependency: function (module, dependency) {
+			if (!A.has(DependencyGraph.dependencies, module)) {
+				DependencyGraph.dependencies[module] = [];
+			}
+
+			DependencyGraph.dependencies[module].push(dependency);
+		},
+
+		/**
+		 * ## - DependencyGraph.logCyclicalDependencies()
+		 *
+		 * Stores a cyclical dependency chain detected during class dependency tree generation
+		 * @param {className} [String] : The name of the class spawning the cyclical dependency chain
+		 * @param {stack} [Array<String>] : The cyclical dependency chain
+		 */
+		logCyclicalDependencies: function (className, stack) {
+			var chain = stack.concat(stack[0]);
+
+			if (!A.has(DependencyGraph.cyclicalDependencies, className)) {
+				DependencyGraph.cyclicalDependencies[className] = [];
+			}
+
+			DependencyGraph.cyclicalDependencies[className].push(chain);
+		},
+
+		/**
+		 * ## - DependencyGraph.buildDependencySubTree()
+		 *
+		 * An intermediate shorthand method used as part of dependency tree generation
+		 * @param {tree} [Object{Object}] : A partial subtree of the dependency tree to add on to
+		 * @param {className} [String] : The name of the class the dependency tree belongs to
+		 * @param {dependency} [String] : The most recent dependency in the stack
+		 * @param {stack} [Array<String>] : The current dependency chain for this branch
+		 */
+		buildDependencySubTree: function (tree, className, dependency, stack) {
+			if (A.isInArray(stack, dependency)) {
+				DependencyGraph.logCyclicalDependencies(className, stack);
+				tree[dependency] = null;
+			} else {
+				stack.push(dependency);
+				tree[dependency] = DependencyGraph.getDependencyTree(dependency, stack);
+				stack.pop();
+			}
+		},
+
+		/**
+		 * ## - DependencyGraph.getDependencyTree()
+		 *
+		 * Returns a tree containing all dependencies of a class, pruned where cyclical dependencies are detected to prevent infinite recursion.
+		 * The root node of the tree is the name of the class.
+		 * @param {className} [String] : The class name
+		 * Optional @param {stack} [Array<String>] : The current dependency chain for this branch (passed in during recursion)
+		 * @returns {tree} [Object{Array<String>}]
+		 */
+		getDependencyTree: function (className, stack) {
+			stack = stack || [className];
+
+			var dependencies = DependencyGraph.dependencies[className] || [];
+			var tree = {};
+
+			switch (dependencies.length) {
+				case 0:
+					return null;
+				case 1:
+					DependencyGraph.buildDependencySubTree(tree, className, dependencies[0], stack);
+					break;
+				default:
+					A.eachInArray(dependencies, function(dependency){
+						DependencyGraph.buildDependencySubTree(tree, className, dependency, stack);
+					});
+			}
+
+			return tree;
 		}
 	};
 
@@ -1196,6 +1409,17 @@
 		 */
 		isReady: function (module) {
 			return (Modules.has(module) && !A.has(Modules.queue, module));
+		},
+
+		/**
+		 * ## - Modules.isClass()
+		 *
+		 * Determines whether a module is a class
+		 * @param {module} [String] : The module name
+		 * @returns [Boolean]
+		 */
+		isClass: function (module) {
+			return (!Modules.isInterface(module) && !Modules.isFreeModule(module));
 		},
 
 		/**
@@ -2119,17 +2343,19 @@
 		 * ## - definer.extends()
 		 *
 		 * Used to extend a class definition with an arbitrary number of base classes
-		 * @param {classes} [String] : A comma-delimited list of base classes to derive into this class
+		 * @param {supers} [String] : A comma-delimited list of base superclasses to derive this class from
 		 * @returns {definer} [Function]
 		 */
-		definer.extends = A.bind(function(classes){
-			classes = classes.replace(/\s/g, '').split(',');
+		definer.extends = A.bind(function(supers){
+			supers = supers.replace(/\s/g, '').split(',');
 
-			A.each(classes, function(name){
-				Modules.inherited[name] = true;
+			A.each(supers, function(superclass){
+				Modules.inherited[superclass] = true;
 
-				this.extends.push(name);
-				Modules.events.on('defined', name, this.checkReadyStatus);
+				this.extends.push(superclass);
+
+				DependencyGraph.logDependency(this.name, superclass);
+				Modules.events.on('defined', superclass, this.checkReadyStatus);
 			}, this);
 
 			return definer;
@@ -2145,6 +2371,7 @@
 		definer.implements = A.bind(function(interfaceName){
 			this.implements = interfaceName;
 
+			DependencyGraph.logDependency(this.name, interfaceName);
 			Modules.events.on('defined', interfaceName, this.checkReadyStatus);
 
 			return definer;
