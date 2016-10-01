@@ -690,6 +690,14 @@
 			INITIALIZATION_FAILURE: 'Access: Failed to initialize application'
 		},
 
+		/**
+		 * ## - Diagnostics.format()
+		 *
+		 * Generates a formatted diagnostics error message based on a base error string and dynamic arguments
+		 * @param {arg1} [String] : The error message from Diagnostics.errors
+		 * @param {[arg2, [arg3, [arg4, ...]]]} [String] : Dynamic values to replace the {*} wildcards in the error message
+		 * @returns {message} [String]
+		 */
 		format: function () {
 			var args = A.argsToArray(arguments);
 			var message = args.splice(0, 1)[0];
@@ -701,17 +709,39 @@
 			return message;
 		},
 
+		/**
+		 * ## - Diagnostics.formatWarning()
+		 *
+		 * Generates and outputs a formatted diagnostics error message to the console as a warning
+		 * @param {arg1} [String] : The error message from Diagnostics.errors
+		 * @param {[arg2, [arg3, [arg4, ...]]]} [String] : Dynamic values to replace the {*} wildcards in the error message
+		 */
 		formatWarning: function () {
 			var warning = Diagnostics.format.apply(null, arguments);
 
 			console.warn(warning);
 		},
 
-		findCyclicalDependencies: function (className) {
+		/**
+		 * ## - Diagnostics.getCyclicalDependencies()
+		 *
+		 * Returns any detected and logged cylical dependency chains from DependencyGraph.cyclicalDependencies for a particular class
+		 * @param {className} [String] : The name of the class to check
+		 * @returns [Array<Array<String>>]
+		 */
+		getCyclicalDependencies: function (className) {
 			return DependencyGraph.cyclicalDependencies[className] || [];
 		},
 
-		findMissingDependencies: function (dependencies) {
+		/**
+		 * ## - Diagnostics.getMissingDependencies()
+		 *
+		 * Returns a list of the names of missing dependencies for a particular class
+		 * @param {className} [String] : The name of the class to check
+		 * @returns [Array<String>]
+		 */
+		getMissingDependencies: function (className) {
+			var dependencies = DependencyGraph.dependencies[className] || [];
 			var missingDependencies = [];
 
 			A.eachInArray(dependencies, function(dependency){
@@ -723,10 +753,18 @@
 			return missingDependencies;
 		},
 
-		dispatchCyclicalDependencyWarnings: function (cyclicalDependencies) {
+		/**
+		 * ## - Diagnostics.dispatchCyclicalDependencyWarnings()
+		 *
+		 * Prints any detected cyclical dependency chains for a particular class to the console as a warning or series of warnings
+		 * @param {className} [String] : The class name
+		 */
+		dispatchCyclicalDependencyWarnings: function (className) {
 			if (Diagnostics.hasReportedCyclicalDependency) {
 				return;
 			}
+
+			var cyclicalDependencies = Diagnostics.getCyclicalDependencies(className);
 
 			A.eachInArray(cyclicalDependencies, function(cyclicalDependency){
 				Diagnostics.hasReportedCyclicalDependency = true;
@@ -735,25 +773,49 @@
 			});
 		},
 
-		dispatchMissingDependencyWarnings: function (className, dependencies) {
-			A.eachInArray(dependencies, function(dependency){
-				Diagnostics.formatWarning(Diagnostics.errors.MISSING_DEPENDENCY, className, dependency);
+		/**
+		 * ## - Diagnostics.dispatchMissingDependencyWarnings()
+		 *
+		 * Prints any detected missing dependencies for a particular class to the console as a warning or series of warnings
+		 * @param {className} [String] : The class name
+		 */
+		dispatchMissingDependencyWarnings: function (className) {
+			var missingDependencies = Diagnostics.getMissingDependencies(className);
+
+			A.eachInArray(missingDependencies, function(missingDependency){
+				Diagnostics.formatWarning(Diagnostics.errors.MISSING_DEPENDENCY, className, missingDependency);
 			});
 		},
 
+		/**
+		 * ## - Diagnostics.diagnoseClassFailure()
+		 *
+		 * Generates a dependency tree for a particular class and analyzes it to detect causes for generation failure
+		 * @param {className} [String] : The class name
+		 */
 		diagnoseClassFailure: function (className) {
-			var dependencyTree = DependencyGraph.getDependencyTree(className);
-			var cyclicalDependencies = Diagnostics.findCyclicalDependencies(className, dependencyTree);
-			var missingDependencies = Diagnostics.findMissingDependencies(DependencyGraph.dependencies[className]);
+			DependencyGraph.buildDependencyTree(className);
 
-			Diagnostics.dispatchCyclicalDependencyWarnings(cyclicalDependencies);
-			Diagnostics.dispatchMissingDependencyWarnings(className, missingDependencies);
+			Diagnostics.dispatchCyclicalDependencyWarnings(className);
+			Diagnostics.dispatchMissingDependencyWarnings(className);
 		},
 
+		/**
+		 * ## - Diagnostics.diagnoseModuleFailure()
+		 *
+		 * Dispatches a generation failure warning for a particular non-class module (interfaces or free functions/objects)
+		 * @param {module} [String] : The module name
+		 */
 		diagnoseModuleFailure: function (module) {
 			Diagnostics.formatWarning(Diagnostics.errors.MODULE_FAILURE, module);
 		},
 
+		/**
+		 * ## - Diagnostics.diagnose()
+		 *
+		 * Detects and dispatches errors for a particular failed module
+		 * @param {module} [String] : The module name
+		 */
 		diagnose: function (module) {
 			if (Modules.isClass(module)) {
 				Diagnostics.diagnoseClassFailure(module);
@@ -762,6 +824,12 @@
 			}
 		},
 
+		/**
+		 * ## - Diagnostics.reportFailures()
+		 *
+		 * Iteratively diagnoses all modules which did not pass the generation process
+		 * @param {failedModules} [Array<String>] : A list of the failed module names
+		 */
 		reportFailures: function (failedModules) {
 			A.eachInArray(failedModules, Diagnostics.diagnose);
 
@@ -794,14 +862,18 @@
 		},
 
 		/**
-		 * ## - DependencyGraph.logCyclicalDependencies()
+		 * ## - DependencyGraph.storeCyclicalDependency()
 		 *
 		 * Stores a cyclical dependency chain detected during class dependency tree generation
 		 * @param {className} [String] : The name of the class spawning the cyclical dependency chain
-		 * @param {stack} [Array<String>] : The dependency stack provided by getDependencyTree()/buildDependencySubTree()
+		 * @param {stack} [Array<String>] : The dependency stack provided by DependencyGraph.buildDependencyTree()
 		 */
-		logCyclicalDependencies: function (className, stack) {
-			var cyclicalDependency = stack.concat(stack[0]);
+		storeCyclicalDependency: function (className, stack) {
+			var cyclicalDependency = stack.concat(className);
+
+			while (cyclicalDependency[0] !== className) {
+				cyclicalDependency.shift();
+			}
 
 			if (!A.has(DependencyGraph.cyclicalDependencies, className)) {
 				DependencyGraph.cyclicalDependencies[className] = [];
@@ -811,51 +883,34 @@
 		},
 
 		/**
-		 * ## - DependencyGraph.buildDependencySubTree()
+		 * ## - DependencyGraph.buildDependencyTree()
 		 *
-		 * An intermediate shorthand method used as part of dependency tree generation
-		 * @param {tree} [Object{Object}] : A partial subtree of the dependency tree to add on to
-		 * @param {className} [String] : The name of the class the dependency tree belongs to
-		 * @param {dependency} [String] : The most recent dependency in the stack
-		 * @param {stack} [Array<String>] : The current dependency chain for this branch
-		 */
-		buildDependencySubTree: function (tree, className, dependency, stack) {
-			if (A.isInArray(stack, dependency)) {
-				DependencyGraph.logCyclicalDependencies(className, stack);
-				tree[dependency] = null;
-			} else {
-				stack.push(dependency);
-				tree[dependency] = DependencyGraph.getDependencyTree(dependency, stack);
-				stack.pop();
-			}
-		},
-
-		/**
-		 * ## - DependencyGraph.getDependencyTree()
-		 *
-		 * Returns a tree containing all dependencies of a class, pruned where cyclical dependencies are detected to prevent infinite recursion.
-		 * The root node of the tree is the name of the class.
+		 * Recursively builds and returns a tree containing all dependencies of a class, pruned where cyclical dependencies are detected
+		 * to prevent infinite recursion. The root node of the tree is the name of the class.
 		 * @param {className} [String] : The class name
 		 * Optional @param {stack} [Array<String>] : The current dependency chain for this branch (passed in during recursion)
-		 * @returns {tree} [Object{Array<String>}]
+		 * @returns {tree} [Object{*}]
 		 */
-		getDependencyTree: function (className, stack) {
+		buildDependencyTree: function (className, stack) {
 			stack = stack || [className];
 
 			var dependencies = DependencyGraph.dependencies[className] || [];
 			var tree = {};
 
-			switch (dependencies.length) {
-				case 0:
-					return null;
-				case 1:
-					DependencyGraph.buildDependencySubTree(tree, className, dependencies[0], stack);
-					break;
-				default:
-					A.eachInArray(dependencies, function(dependency){
-						DependencyGraph.buildDependencySubTree(tree, className, dependency, stack);
-					});
+			if (dependencies.length === 0) {
+				return null;
 			}
+
+			A.eachInArray(dependencies, function(dependency){
+				if (A.isInArray(stack, dependency)) {
+					tree[dependency] = null;
+					DependencyGraph.storeCyclicalDependency(dependency, stack);
+				} else {
+					stack.push(dependency);
+					tree[dependency] = DependencyGraph.buildDependencyTree(dependency, stack);
+					stack.pop();
+				}
+			});
 
 			return tree;
 		}
