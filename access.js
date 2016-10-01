@@ -518,17 +518,6 @@
 		},
 
 		/**
-		 * ## - A.getLastInArray()
-		 *
-		 * Returns the last element of an array
-		 * @param {array} [Array<*>] : The array to retrieve the element from
-		 * @returns [*]
-		 */
-		getLastInArray: function (array) {
-			return array.slice(array.length - 1)[0];
-		},
-
-		/**
 		 * ## - A.isInArray()
 		 *
 		 * Determine whether a value is contained within a one-dimensional array
