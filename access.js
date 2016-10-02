@@ -327,17 +327,8 @@
 		 * @param {handler(value, index, array)} [Function] : A handler function to act with the element data
 		 */
 		eachInArray: function (array, handler) {
-			var length = array.length;
-			var i = length + 1;
-
-			if (length < 1) {
-				return;
-			}
-
-			while (--i) {
-				var index = length - i;
-
-				if (handler(array[index], index, array) === false) {
+			for (var i = 0 ; i < array.length ; i++) {
+				if (handler(array[i], i, array) === false) {
 					break;
 				}
 			}
