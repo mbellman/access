@@ -268,11 +268,11 @@
 		 * ## - A.bindReference()
 		 *
 		 * Creates a one-way binding from a proxy object property to an original context
-		 * @param {name} [String] : The property name
 		 * @param {proxy} [Object] : The proxy object
 		 * @param {context} [Object] : The original context object to bind the proxy object property to
+		 * @param {name} [String] : The property name
 		 */
-		bindReference: function (name, proxy, context) {
+		bindReference: function (proxy, context, name) {
 			Object.defineProperty(proxy, name, {
 				configurable: true,
 				enumerable: true,
@@ -426,7 +426,7 @@
 		 *
 		 * Extends a target object with properties from an arbitrary number of other objects (deep & recursive) and returns the result
 		 * @param {object1} [Object] : The target object
-		 * @param {[object2, [object3, [...]]]} [Object] : Objects used to extend target
+		 * @param {[object2, [object3, ...]]} [Object] : Objects used to extend target
 		 * @returns {target} [Object]
 		 */
 		extend: function () {
@@ -445,6 +445,29 @@
 				} else {
 					target[key] = value;
 				}
+			});
+
+			return target;
+		},
+
+		/**
+		 * ## - A.concat()
+		 *
+		 * Concatenates an arbitrary number of arrays onto an original array and returns the original
+		 * @param {array1} [Array<*>] : The array to concatenate additional arrays onto
+		 * @param {[array2, [array3, ...]]} : The additional arrays to concatenate onto the first
+		 * @returns {array} [Array<*>]
+		 */
+		concat: function () {
+			var arrays = A.argsToArray(arguments);
+			var target = arrays[0];
+
+			arrays.shift();
+
+			A.eachInArray(arrays, function(array){
+				A.eachInArray(array, function(element){
+					target.push(element);
+				});
 			});
 
 			return target;
@@ -1086,8 +1109,12 @@
 			};
 
 			if (Core.inSuperMode) {
-				table.protected = {};
 				table.protectedNames = [];
+
+				table.finalNames = {
+					public: [],
+					protected: []
+				};
 			}
 
 			return table;
@@ -1124,10 +1151,6 @@
 		 */
 		getWritableTargets: function (member, memberTable) {
 			var targets = [memberTable.class];
-
-			if (member.isPublic) {
-				targets.push(memberTable.public);
-			}
 
 			if (member.isStatic) {
 				targets.push(memberTable.static);
@@ -1171,6 +1194,23 @@
 			return specialMembers;
 		},
 
+		// TODO: Document
+		evaluateSpecialSuperMember: function (memberTable, member) {
+			if (member.isProtected) {
+				memberTable.protectedNames.push(member.name);
+			}
+
+			if (member.isFinal) {
+				if (member.isPublic) {
+					memberTable.finalNames.public.push(member.name);
+				}
+
+				if (member.isProtected) {
+					memberTable.finalNames.protected.push(member.name);
+				}
+			}
+		},
+
 		/**
 		 * ## - Members.attachSpecialObjectMember()
 		 *
@@ -1194,8 +1234,8 @@
 				}
 			}
 
-			if (Core.inSuperMode && object.isProtected) {
-				memberTable.protected[object.name] = object.value;
+			if (Core.inSuperMode) {
+				Members.evaluateSpecialSuperMember(memberTable, object);
 			}
 
 			memberTable.class[object.name] = object.value;
@@ -1232,19 +1272,18 @@
 				});
 
 				if (primitive.isPublic) {
-					A.bindReference(primitive.name, constructor, memberTable.static);
-					writableTargets.splice(1, 1);
+					A.bindReference(constructor, memberTable.static, primitive.name);
 				}
 			} else {
 				descriptor.value = primitive.value;
 			}
 
 			if (primitive.isPublic) {
-				A.bindReference(primitive.name, memberTable.public, memberTable.class);
+				A.bindReference(memberTable.public, memberTable.class, primitive.name);
 			}
 
-			if (Core.inSuperMode && primitive.isProtected) {
-				A.bindReference(primitive.name, memberTable.protected, memberTable.class);
+			if (Core.inSuperMode) {
+				Members.evaluateSpecialSuperMember(memberTable, primitive);
 			}
 
 			A.setWritable(writableTargets, primitive.name, !primitive.isFinal);
@@ -1289,9 +1328,7 @@
 			memberTable.publicNames = A.getKeyNames(memberTable.public);
 
 			if (Core.inSuperMode) {
-				A.extend(memberTable.protected, members.protected);
-
-				memberTable.protectedNames = A.getKeyNames(memberTable.protected);
+				A.concat(memberTable.protectedNames, A.getKeyNames(members.protected));
 			}
 
 			return memberTable;
@@ -1306,13 +1343,14 @@
 		 * @param {key} [String] : The name of the member to remove
 		 */
 		purge: function (instance, key) {
-			if (!A.has(instance, key)) {
+			if (A.isUndefined(instance[key])) {
 				return;
 			}
 
 			A.setWritable(instance, key, true);
 
 			delete instance[key];
+			instance[key] = undefined;
 
 			if (A.has(instance, 'proxy') && A.has(instance.proxy, key)) {
 				delete instance.proxy[key];
@@ -1823,6 +1861,9 @@
 
 			var publicNames = memberTable.publicNames;
 			var protectedNames = memberTable.protectedNames;
+			var publicFinalNames = memberTable.finalNames.public;
+			var protectedFinalNames = memberTable.finalNames.protected;
+			var proxiedNames = publicNames.concat(protectedNames);
 
 			/**
 			 * @param {derivedInstance} [Object] : The derived class instance
@@ -1831,12 +1872,13 @@
 			function SuperConstructor (derivedInstance, args) {
 				var superInstance = Instances.createSuperInstance(memberTable, derivedInstance);
 
-				Instances.bind(superInstance.proxy, superInstance, publicNames);
-				Instances.bind(superInstance.proxy, superInstance, protectedNames);
+				Instances.bind(superInstance.proxy, superInstance, proxiedNames);
 
-				Instances.bind(derivedInstance, superInstance, publicNames, true);
-				Instances.bind(derivedInstance.proxy, superInstance, publicNames, true);
-				Instances.bind(derivedInstance, superInstance, protectedNames, true);
+				Instances.deepInheritMembers(superInstance, publicNames, true);
+				Instances.deepInheritMembers(superInstance, protectedNames, false);
+
+				Instances.restoreFinalMembers(superInstance, publicFinalNames, true);
+				Instances.restoreFinalMembers(superInstance, protectedFinalNames, false);
 
 				Instances.initialize(module, superInstance, deepSupers, args);
 				Instances.inherit(superInstance, deepSupers);
@@ -1905,6 +1947,19 @@
 			}
 
 			return null;
+		},
+
+		// TODO: Document
+		propagateUp: function (base, handler) {
+			var derivedInstance = base.__derivedInstance__;
+
+			while (!A.isUndefined(derivedInstance)) {
+				if (handler(derivedInstance) === false) {
+					break;
+				}
+
+				derivedInstance = derivedInstance.__derivedInstance__;
+			}
 		}
 	};
 
@@ -2024,59 +2079,67 @@
 		},
 
 		/**
-		 * ## - Instances.restoreFinalMember()
+		 * ## - Instances.deepInheritMembers()
 		 *
-		 * Restores the inherited value from a base class instance final member by propagating it up the __derivedInstance__ chain
-		 * @param {name} [String] : The name of the final member
-		 * @param {base} [Object] : The base object
+		 * Propagates a specified group of members up the __derivedInstance__ chain of a superclass,
+		 * stopping where a member has already been defined
+		 * @param {base} [Object] : The base (superclass) instance object
+		 * @param {members} [Array<String>] : The names of the members to propagate
 		 */
-		restoreFinalMember: function (name, base) {
-			var derivedInstance = base.__derivedInstance__;
+		deepInheritMembers: function (base, members, isPublic) {
+			Supers.propagateUp(base, function(derivedInstance){
+				A.eachInArray(members, function(member){
+					Instances.bind(derivedInstance, base, [member]);
 
-			do {
-				if (A.isUndefined(derivedInstance) || A.isUndefined(derivedInstance[name])) {
-					break;
-				}
+					if (isPublic) {
+						Instances.bind(derivedInstance.proxy, derivedInstance, [member]);
+					}
+				});
+			});
+		},
 
-				var isProxied = A.has(derivedInstance.proxy, name);
+		/**
+		 * ## - Instances.restoreFinalMembers()
+		 *
+		 * Restores member values from a list of base class instance members by propagating them up the __derivedInstance__ chain
+		 * @param {base} [Object] : The base (superclass) instance object
+		 * @param {members} [Array<String>] : The names of the final members to propagate
+		 */
+		restoreFinalMembers: function (base, members, isPublic) {
+			if (members.length === 0) {
+				return;
+			}
 
-				Members.purge(derivedInstance, name);
-				A.bindReference(name, derivedInstance, base);
+			console.log(members);
 
-				if (isProxied) {
-					A.bindReference(name, derivedInstance.proxy, derivedInstance);
-				}
-			} while ((derivedInstance = derivedInstance.__derivedInstance__));
+			Supers.propagateUp(base, function(derivedInstance){
+				A.eachInArray(members, function(name){
+					if (A.isUndefined(derivedInstance[name]) || derivedInstance[name] === base[name]) {
+						return;
+					}
+
+					Members.purge(derivedInstance, name);
+					A.bindReference(derivedInstance, base, name);
+
+					if (isPublic) {
+						A.bindReference(derivedInstance.proxy, derivedInstance, name);
+					}
+				});
+			});
 		},
 
 		/**
 		 * ## - Instances.bind()
 		 *
-		 * Clones and binds the members listed in a "members" array from a base instance object onto a proxy object. The first use for this
-		 * scheme is the creation and binding of public-facing class members to the internal instance for context preservation. The second use
-		 * is for inheritance of base class public and protected members onto a derived class instance, which occurs after the former case.
-		 * The cause for reverse inheritance is that it is quickest to construct the initial derived instance with Object.create() using
-		 * the derived class member table - after this we bind inherited members using "forceRevert" set to true to catch and revert final
-		 * inherited members. Member purging is first necessary to remove any illegally bound access-modified derivations of final base members.
+		 * Clones and binds a list of members from a base instance object onto a proxy instance object if the member is not already present
 		 * @param {proxy} [Object] : A public alias object on which to bind properties pointing to the equivalent base instance properties
 		 * @param {base} [Object] : The base instance object
 		 * @param {members} [Array<String>] : A list of member names to be cloned and bound
-		 * @param {forceRevert} [Boolean] : Forces overriding of derived class instance members if a base class instance member is final
 		 */
-		bind: function (proxy, base, members, forceRevert) {
-			var baseProto = Object.getPrototypeOf(base);
-
+		bind: function (proxy, base, members) {
 			A.eachInArray(members, function(name){
-				var isFinal = false;
-
 				if (!A.isUndefined(proxy[name])) {
-					if (forceRevert && !A.isWritable(baseProto, name)) {
-						Members.purge(proxy, name);
-
-						isFinal = true;
-					} else {
-						return;
-					}
+					return;
 				}
 
 				var member = base[name];
@@ -2089,11 +2152,7 @@
 						proxy[name] = member;
 						break;
 					default:
-						A.bindReference(name, proxy, base);
-				}
-
-				if (isFinal) {
-					Instances.restoreFinalMember(name, base);
+						A.bindReference(proxy, base, name);
 				}
 			});
 		},
